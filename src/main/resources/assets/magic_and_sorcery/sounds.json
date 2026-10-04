@@ -1,0 +1,30 @@
+{
+  "spell.bolt": {
+    "category": "player",
+    "subtitle": "subtitles.magic_and_sorcery.spell.bolt",
+    "sounds": [
+      {
+        "name": "magic_and_sorcery:bolt",
+        "volume": 0.5
+      }
+    ]
+  },
+  "spell.blizzard": {
+    "category": "player",
+    "subtitle": "subtitles.magic_and_sorcery.spell.blizzard",
+    "sounds": [
+      {
+        "name": "magic_and_sorcery:blizzard"
+      }
+    ]
+  },
+  "spell.sword_explosion": {
+    "category": "player",
+    "subtitle": "subtitles.magic_and_sorcery.spell.sword_explosion",
+    "sounds": [
+      {
+        "name": "magic_and_sorcery:sword_explosion"
+      }
+    ]
+  }
+}
