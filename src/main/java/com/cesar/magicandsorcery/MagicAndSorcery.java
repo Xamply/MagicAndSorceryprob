@@ -57,6 +57,9 @@ public class MagicAndSorcery {
         public static void onClientSetup(FMLClientSetupEvent event) {
             LOGGER.info("Magic and Sorcery: Client setup completed");
 
+            // Staff arm pose has to exist before any player model is drawn (see WandAnimation)
+            event.enqueueWork(com.cesar.magicandsorcery.client.render.WandAnimation::registerArmPose);
+
             // Register Config Screen for Mods menu: Options -> Mods -> Magic and Sorcery -> Config
             net.minecraftforge.fml.ModLoadingContext.get().registerExtensionPoint(
                     net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory.class,

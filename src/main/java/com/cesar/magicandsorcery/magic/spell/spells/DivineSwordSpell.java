@@ -68,7 +68,8 @@ public class DivineSwordSpell extends Spell {
             // Check dimensions: 5 blocks depth, 6 blocks width (±3.0 from center), 2 blocks height
             if (distFwd >= 0.0 && distFwd <= 5.5 && distSide <= 3.2 && distY >= -1.0 && distY <= 2.8) {
                 target.hurt(player.damageSources().playerAttack(player), finalDamage);
-                target.knockback(0.7, -forward.x, -forward.z);
+                // Holy slash throws the target back (ragdolls it when Ragdoll Physics is installed)
+                com.cesar.magicandsorcery.magic.spell.SpellImpacts.push(target, new Vec3(forward.x * 1.2, 0.45, forward.z * 1.2));
                 hitCount++;
 
                 // Spawn impact particles on hit entity

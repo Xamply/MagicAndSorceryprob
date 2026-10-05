@@ -36,6 +36,14 @@ public class MagicHudOverlay {
         Font font = mc.font;
         float time = mc.player.tickCount + partialTick;
 
+        // Flash: violet burst of light across the screen right after blinking
+        float flash = com.cesar.magicandsorcery.client.fx.FlashFx.screenFlash(partialTick);
+        if (flash > 0.01f) {
+            MagicGui.gradientRect(g, 0, 0, screenWidth, screenHeight,
+                    MagicGui.alpha(0xFFC27BFF, 0.45f * flash), MagicGui.alpha(0xFF6A2CFF, 0.3f * flash), true);
+            g.flush();
+        }
+
         if (ClientMagicData.isRadialMenuOpen()) {
             renderRadialMenu(g, mc, font, screenWidth, screenHeight, time);
         } else if (ClientMagicData.isChanneling()) {
@@ -443,7 +451,15 @@ public class MagicHudOverlay {
                 inspected = hoveredSpell;
             }
             if (inspected != null) {
+                // Info card drawn 20% smaller, anchored to the right edge
+                float cardScale = 0.8f;
+                float anchorX = panelX + panelW;
+                g.pose().pushPose();
+                g.pose().translate(anchorX, centerY, 0);
+                g.pose().scale(cardScale, cardScale, 1.0f);
+                g.pose().translate(-anchorX, -centerY, 0);
                 renderSpellCard(g, mc, font, panelX, panelW, centerY, screenHeight, time, inspected, method);
+                g.pose().popPose();
             }
         }
         g.pose().popPose();

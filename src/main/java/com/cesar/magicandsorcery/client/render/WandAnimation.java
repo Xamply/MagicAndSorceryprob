@@ -44,6 +44,7 @@ public final class WandAnimation {
     private static int flickTicks;
 
     private static HumanoidModel.ArmPose wandPose;
+    private static boolean wandPoseSafe;
 
     public static final IClientItemExtensions ITEM_EXTENSIONS = new IClientItemExtensions() {
         @Override
@@ -184,11 +185,54 @@ public final class WandAnimation {
     // THIRD PERSON
     // ------------------------------------------------------------------
 
-    private static HumanoidModel.ArmPose getWandPose() {
+    /**
+     * Must run during client setup, before any humanoid model is rendered.
+     * HumanoidModel caches the ArmPose values in a switch table the first time it poses an arm;
+     * a pose created after that point is out of range and crashes the game.
+     */
+    public static void registerArmPose() {
         if (wandPose == null) {
             wandPose = HumanoidModel.ArmPose.create("MAGIC_AND_SORCERY_WAND", false, WandAnimation::applyThirdPerson);
+            wandPoseSafe = switchTablesFit(wandPose.ordinal());
+            if (!wandPoseSafe) {
+                com.mojang.logging.LogUtils.getLogger().warn(
+                        "Magic and Sorcery: HumanoidModel arm poses were cached too early; using the vanilla staff pose");
+            }
         }
-        return wandPose;
+    }
+
+    private static HumanoidModel.ArmPose getWandPose() {
+        // Never create the pose lazily here (see registerArmPose); fall back to the vanilla pose instead.
+        return wandPose != null && wandPoseSafe ? wandPose : HumanoidModel.ArmPose.ITEM;
+    }
+
+    /**
+     * Initializes HumanoidModel's enum switch tables now (so they include the new pose) and checks that
+     * none of them was already built before it. A table built earlier is too short and would crash.
+     */
+    private static boolean switchTablesFit(int ordinal) {
+        try {
+            for (int i = 1; i <= 8; i++) {
+                Class<?> table;
+                try {
+                    table = Class.forName(HumanoidModel.class.getName() + "$" + i, true, HumanoidModel.class.getClassLoader());
+                } catch (ClassNotFoundException e) {
+                    continue;
+                }
+                for (java.lang.reflect.Field field : table.getDeclaredFields()) {
+                    if (!java.lang.reflect.Modifier.isStatic(field.getModifiers()) || field.getType() != int[].class) continue;
+                    field.setAccessible(true);
+                    int[] map = (int[]) field.get(null);
+                    // Vanilla has 10 arm poses; smaller tables belong to other enums (e.g. HumanoidArm)
+                    if (map != null && map.length >= 10 && map.length <= ordinal) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private static void applyThirdPerson(HumanoidModel<?> model, LivingEntity entity, HumanoidArm arm) {

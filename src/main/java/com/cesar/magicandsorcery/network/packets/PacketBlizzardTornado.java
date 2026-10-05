@@ -1,6 +1,6 @@
 package com.cesar.magicandsorcery.network.packets;
 
-import com.cesar.magicandsorcery.client.render.ClientTornadoHandler;
+import com.cesar.magicandsorcery.client.fx.TornadoFx;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
@@ -45,7 +45,7 @@ public class PacketBlizzardTornado {
         NetworkEvent.Context ctx = supplier.get();
         ctx.enqueueWork(() -> {
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                ClientTornadoHandler.addTornado(new Vec3(x, y, z), durationTicks, seed);
+                TornadoFx.add(new Vec3(x, y, z), durationTicks, seed);
             });
         });
         return true;

@@ -20,7 +20,7 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public class ModNetwork {
-    private static final String PROTOCOL_VERSION = "1.0";
+    private static final String PROTOCOL_VERSION = "1.1";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(MagicAndSorcery.MODID, "main"),
             () -> PROTOCOL_VERSION,
@@ -134,6 +134,12 @@ public class ModNetwork {
                 .decoder(com.cesar.magicandsorcery.network.packets.PacketAssignSpell::new)
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketAssignSpell::toBytes)
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketAssignSpell::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketFlashVisual.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketFlashVisual::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketFlashVisual::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketFlashVisual::handle)
                 .add();
     }
 

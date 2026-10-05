@@ -3,10 +3,12 @@ package com.cesar.magicandsorcery.magic.spell.spells;
 import com.cesar.magicandsorcery.MagicAndSorcery;
 import com.cesar.magicandsorcery.magic.catalyst.CastingMethod;
 import com.cesar.magicandsorcery.magic.spell.Spell;
+import com.cesar.magicandsorcery.magic.spell.SpellImpacts;
 import com.cesar.magicandsorcery.magic.spell.SpellSchool;
 import com.cesar.magicandsorcery.magic.spell.SpellType;
+import com.cesar.magicandsorcery.network.ModNetwork;
+import com.cesar.magicandsorcery.network.packets.PacketFlashVisual;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -82,18 +84,26 @@ public class FlashSpell extends Spell {
             dest = new Vec3(dest.x, destBlock.getY(), dest.z);
         }
 
-        // Origin particles and sound
         Vec3 origin = player.position();
-        serverLevel.sendParticles(ParticleTypes.PORTAL, origin.x, origin.y + 1.0, origin.z, 20, 0.3, 0.5, 0.3, 0.1);
-        serverLevel.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0f, 1.2f);
+        float height = player.getBbHeight();
+
+        // Everyone nearby sees the blink (both ends of the jump)
+        ModNetwork.sendToNearby(new PacketFlashVisual(player.getId(), origin, dest, height, serverLevel.getRandom().nextLong()),
+                serverLevel, origin.lerp(dest, 0.5), 80.0);
+
+        // Departure: the vacuum left behind pulls nearby things in
+        SpellImpacts.shockwave(serverLevel, origin, 3.0, -0.35, 0.12, player);
+        serverLevel.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ILLUSIONER_MIRROR_MOVE, SoundSource.PLAYERS, 1.2f, 1.3f);
+        serverLevel.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.5f, 1.6f);
 
         // Teleport
         player.teleportTo(dest.x, dest.y, dest.z);
         player.resetFallDistance();
 
-        // Destination particles and sound
-        serverLevel.sendParticles(ParticleTypes.REVERSE_PORTAL, dest.x, dest.y + 1.0, dest.z, 20, 0.3, 0.5, 0.3, 0.1);
-        serverLevel.playSound(null, dest.x, dest.y, dest.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0f, 1.4f);
+        // Arrival: burst of force shoving everything around outward
+        SpellImpacts.shockwave(serverLevel, dest, 3.5, 0.6, 0.3, player);
+        serverLevel.playSound(null, dest.x, dest.y, dest.z, SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 1.4f, 1.5f);
+        serverLevel.playSound(null, dest.x, dest.y, dest.z, SoundEvents.EVOKER_CAST_SPELL, SoundSource.PLAYERS, 0.9f, 1.7f);
 
         return true;
     }
