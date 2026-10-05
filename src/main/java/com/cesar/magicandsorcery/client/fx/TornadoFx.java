@@ -110,6 +110,9 @@ public final class TornadoFx {
             float strength = BlizzardSpell.intensity(t);
 
             tickShards(tornado, c, height, strength, t, random);
+            if (tornado.age % 10 == 0 && strength > 0.3f) {
+                GroundMarks.frost(c, random.nextLong());
+            }
             spawnAmbient(mc, c, height, strength, random);
 
             if (tornado.age % 7 == 0 && tornado.shards.size() >= 2 && strength > 0.4f) {

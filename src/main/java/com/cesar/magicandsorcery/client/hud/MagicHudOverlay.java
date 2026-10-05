@@ -27,12 +27,6 @@ public class MagicHudOverlay {
     private static final float[] SLOT_HOVER = new float[RadialMenuRenderer.TOTAL_SLOTS];
     private static long lastFrameMs = 0L;
 
-    /** Screen-space sparks thrown off the charging ring: x, y, vx, vy, age, life, size. */
-    private static final java.util.List<float[]> RING_SPARKS = new java.util.ArrayList<>();
-    private static final java.util.Random RING_RANDOM = new java.util.Random();
-    private static long lastRingFrameMs = 0L;
-    private static float sparkDebt = 0.0f;
-    private static boolean wasReady = false;
 
     public static final IGuiOverlay HUD_MAGIC = (gui, g, partialTick, screenWidth, screenHeight) -> {
         Minecraft mc = Minecraft.getInstance();
@@ -62,10 +56,6 @@ public class MagicHudOverlay {
             renderRadialMenu(g, mc, font, screenWidth, screenHeight, time);
         } else if (ClientMagicData.isChanneling()) {
             renderChannelRing(g, font, screenWidth, screenHeight, time);
-        } else if (!RING_SPARKS.isEmpty() || lastRingFrameMs != 0L) {
-            RING_SPARKS.clear();
-            lastRingFrameMs = 0L;
-            wasReady = false;
         }
 
         renderSpellHud(g, mc, font, screenWidth, screenHeight, time);
@@ -203,125 +193,37 @@ public class MagicHudOverlay {
     // CHANNELING RING (around the crosshair)
     // =========================================================================
 
+    /**
+     * Minimal charging indicator around the crosshair: a thin progress ring with a bright head,
+     * and tiny faint runes that reveal themselves as the spell charges. It stays perfectly still.
+     */
     private static void renderChannelRing(GuiGraphics g, Font font, int screenWidth, int screenHeight, float time) {
         Spell spell = ClientMagicData.getChannelingSpell();
         if (spell == null) return;
 
-        SpellVisuals.Style style = SpellVisuals.of(spell);
-        int accent = style.color();
-        int bright = MagicGui.mix(accent, 0xFFFFFFFF, 0.45f);
+        int accent = SpellVisuals.of(spell).color();
         boolean ready = ClientMagicData.isReadyToCast();
         float progress = ready ? 1.0f : ClientMagicData.getChannelProgress();
+        float cx = screenWidth / 2.0f;
+        float cy = screenHeight / 2.0f;
+        float r = 7.5f;
 
-        long now = Util.getMillis();
-        float dt = lastRingFrameMs == 0L ? 0.0f : Math.max(0.0f, Math.min(0.1f, (now - lastRingFrameMs) / 1000.0f));
-        lastRingFrameMs = now;
-
-        // The ring shakes harder the closer the cast is to completion
-        float agitation = ready ? 0.35f : 0.25f + 3.4f * (float) Math.pow(progress, 2.2);
-        float ox = (float) (Math.sin(time * 13.7) + Math.sin(time * 7.3 + 1.3)) * 0.5f * agitation;
-        float oy = (float) (Math.cos(time * 11.9) + Math.sin(time * 5.1 + 0.7)) * 0.5f * agitation;
-        float cx = screenWidth / 2.0f + ox;
-        float cy = screenHeight / 2.0f + oy;
-        float r = 13.0f + (float) Math.sin(time * 0.9) * 0.7f * progress;
-
-        // Spark emission grows with progress, with a burst the moment the spell is ready
-        float rate = ready ? 6.0f : 4.0f + 70.0f * (float) Math.pow(progress, 1.6);
-        sparkDebt += rate * dt;
-        if (ready && !wasReady) sparkDebt += 26.0f;
-        wasReady = ready;
-        while (sparkDebt >= 1.0f && RING_SPARKS.size() < 160) {
-            sparkDebt -= 1.0f;
-            float a = RING_RANDOM.nextFloat() * (float) TAU;
-            float speed = 18.0f + RING_RANDOM.nextFloat() * (30.0f + 50.0f * progress);
-            float tangential = (RING_RANDOM.nextFloat() - 0.5f) * 30.0f;
-            float vx = (float) Math.cos(a) * speed - (float) Math.sin(a) * tangential;
-            float vy = (float) Math.sin(a) * speed + (float) Math.cos(a) * tangential;
-            RING_SPARKS.add(new float[]{(float) Math.cos(a) * r, (float) Math.sin(a) * r, vx, vy, 0.0f,
-                    0.35f + RING_RANDOM.nextFloat() * 0.55f, 0.6f + RING_RANDOM.nextFloat() * 1.0f});
-        }
-        sparkDebt = Math.min(sparkDebt, 4.0f);
-
-        // --- Shapes ---
-        MagicGui.ring(g, cx, cy, r - 1.5f, r + 1.5f, 0x55000000, 48);
-        MagicGui.glowCircle(g, cx, cy, r + 10.0f + 8.0f * progress, MagicGui.alpha(accent, 0.08f + 0.22f * progress), 36);
-
+        MagicGui.ring(g, cx, cy, r - 0.5f, r + 0.5f, 0x40000000, 40);
         if (!ready) {
             double start = -Math.PI / 2.0;
             double end = start + TAU * progress;
-            MagicGui.glowArc(g, cx, cy, r, 2.5f + 1.5f * progress, start, end, MagicGui.alpha(accent, 0.9f), 48);
-            MagicGui.arc(g, cx, cy, r - 0.75f, r + 0.75f, start, end, accent, accent, 48, false);
-            float hx = cx + r * (float) Math.cos(end);
-            float hy = cy + r * (float) Math.sin(end);
-            MagicGui.glowCircle(g, hx, hy, 5.0f + 3.0f * progress, 0xCCFFFFFF, 12);
-            MagicGui.dottedRing(g, cx, cy, r + 6.0f, 3 + (int) (progress * 5), 1.1f, time * (0.15f + 0.25f * progress),
-                    MagicGui.alpha(accent, 0.75f));
+            MagicGui.glowArc(g, cx, cy, r, 1.2f, start, end, MagicGui.alpha(accent, 0.45f), 40);
+            MagicGui.arc(g, cx, cy, r - 0.6f, r + 0.6f, start, end, accent, accent, 40, false);
+            MagicGui.circle(g, cx + r * (float) Math.cos(end), cy + r * (float) Math.sin(end), 1.1f, 0xFFFFFFFF, 8);
         } else {
-            float p = MagicGui.pulse(time, 0.35f);
-            MagicGui.glowCircle(g, cx, cy, r + 16.0f, MagicGui.alpha(accent, 0.16f + 0.14f * p), 40);
-            MagicGui.glowRing(g, cx, cy, r, 3.0f + 2.0f * p, MagicGui.alpha(accent, 0.95f), 48);
-            MagicGui.ring(g, cx, cy, r - 0.8f, r + 0.8f, bright, 48);
-            MagicGui.dottedRing(g, cx, cy, r + 4.5f, 4, 1.4f, -time * 0.09f, bright);
-        }
-
-        // Energy cracks lashing out of the ring near the end of the cast
-        if (progress > 0.7f) {
-            float crack = (progress - 0.7f) / 0.3f;
-            java.util.Random crackRandom = new java.util.Random((long) (time * 2.0f) * 7919L);
-            int count = 1 + (int) (crack * 3);
-            for (int k = 0; k < count; k++) {
-                double a = crackRandom.nextDouble() * TAU;
-                float px = cx + r * (float) Math.cos(a);
-                float py = cy + r * (float) Math.sin(a);
-                float len = 5.0f + crackRandom.nextFloat() * (6.0f + 8.0f * crack);
-                for (int seg = 0; seg < 3; seg++) {
-                    double ja = a + (crackRandom.nextDouble() - 0.5) * 1.2;
-                    float nx = px + (float) Math.cos(ja) * len / 3.0f;
-                    float ny = py + (float) Math.sin(ja) * len / 3.0f;
-                    MagicGui.line(g, px, py, nx, ny, 1.2f, MagicGui.alpha(bright, 0.9f * crack), MagicGui.alpha(accent, 0.5f * crack), true);
-                    px = nx;
-                    py = ny;
-                }
-            }
-        }
-
-        // Sparks
-        java.util.Iterator<float[]> it = RING_SPARKS.iterator();
-        while (it.hasNext()) {
-            float[] sp = it.next();
-            sp[4] += dt;
-            if (sp[4] >= sp[5]) {
-                it.remove();
-                continue;
-            }
-            sp[0] += sp[2] * dt;
-            sp[1] += sp[3] * dt;
-            sp[2] *= 1.0f - 2.2f * dt;
-            sp[3] *= 1.0f - 2.2f * dt;
-            float life = 1.0f - sp[4] / sp[5];
-            float sx = cx + sp[0];
-            float sy = cy + sp[1];
-            MagicGui.glowCircle(g, sx, sy, 2.5f + sp[6] * 2.0f, MagicGui.alpha(accent, 0.6f * life), 8);
-            MagicGui.diamond(g, sx, sy, sp[6], sp[6], MagicGui.alpha(bright, life), MagicGui.alpha(accent, life), false);
+            float p = MagicGui.pulse(time, 0.25f);
+            MagicGui.glowRing(g, cx, cy, r, 1.4f + 0.8f * p, MagicGui.alpha(accent, 0.55f), 40);
+            MagicGui.ring(g, cx, cy, r - 0.6f, r + 0.6f, MagicGui.mix(accent, 0xFFFFFFFF, 0.3f), 40);
         }
         g.flush();
 
-        // --- Runes: they appear and speed up while charging ---
-        float runeAlpha = ready ? 0.9f : 0.2f + 0.7f * progress;
-        float runeSpeed = ready ? 0.05f : 0.02f + 0.08f * progress;
-        MagicGui.runeRing(g, font, cx, cy, r + 10.0f, 14, time * runeSpeed, MagicGui.alpha(accent, runeAlpha), 0.55f, 3);
-        if (progress > 0.5f) {
-            float inner = (progress - 0.5f) / 0.5f;
-            MagicGui.runeRing(g, font, cx, cy, r + 17.0f, 20, -time * runeSpeed * 0.7f,
-                    MagicGui.alpha(MagicGui.mix(accent, 0xFFFFFFFF, 0.3f), 0.6f * inner), 0.45f, 9);
-        }
-
-        if (ready) {
-            MagicGui.centeredText(g, font, "✦ LISTO ✦", cx, cy + r + 22.0f, 0.75f, MagicGui.mix(accent, 0xFFFFFFFF, 0.3f), true);
-        } else {
-            MagicGui.centeredText(g, font, (int) (progress * 100) + "%", cx, cy + r + 22.0f, 0.6f,
-                    MagicGui.alpha(MagicGui.TEXT, 0.85f), true);
-        }
+        float runeAlpha = ready ? 0.5f : 0.1f + 0.35f * progress;
+        MagicGui.runeRing(g, font, cx, cy, r + 5.0f, 12, time * 0.02f, MagicGui.alpha(accent, runeAlpha), 0.33f, 3);
     }
 
     // =========================================================================

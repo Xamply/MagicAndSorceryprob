@@ -43,7 +43,6 @@ public final class BoltFx {
     private static final int[] STROKE_TICKS = {2, 5, 8};
     private static final float[] STROKE_POWER = {1.0f, 0.8f, 0.6f};
     private static final int FLASH_LIFE = 22;
-    private static final int SCORCH_LIFE = 70;
 
     // Golden storm palette
     private static final float[] OUTER = {1.0f, 0.55f, 0.15f};
@@ -53,10 +52,6 @@ public final class BoltFx {
 
     /** One drawn polyline of a bolt (trunk, branch or twig). */
     private record Strand(List<Vec3> points, float width) {
-    }
-
-    /** Burned branch of the ground scorch. */
-    private record Scar(double x1, double z1, double x2, double z2, float width) {
     }
 
     private static final class Strike {
@@ -70,7 +65,6 @@ public final class BoltFx {
         final List<List<Strand>> strokes = new ArrayList<>();
         final List<Strand> leader;
         final List<List<List<Strand>>> chainStrokes = new ArrayList<>();
-        final List<Scar> scars = new ArrayList<>();
         int age;
 
         Strike(Vec3 start, Vec3 end, long seed, boolean hitEntity, List<Vec3> chain, Double groundY, int victimId) {
@@ -94,35 +88,14 @@ public final class BoltFx {
                 chainStrokes.add(linkStrokes);
                 from = chain.get(i);
             }
-            if (groundY != null) {
-                Random r = new Random(seed * 13);
-                int roots = 7 + r.nextInt(4);
-                for (int k = 0; k < roots; k++) {
-                    growScar(end.x, end.z, r.nextDouble() * Math.PI * 2.0, 0.9 + r.nextDouble() * 0.6, 0.16f, 0, r);
-                }
-            }
-        }
-
-        /** Lichtenberg figure: recursive forking burn marks. */
-        private void growScar(double x, double z, double angle, double length, float width, int depth, Random r) {
-            if (depth > 4 || length < 0.12) return;
-            double a = angle + (r.nextDouble() - 0.5) * 0.7;
-            double nx = x + Math.cos(a) * length;
-            double nz = z + Math.sin(a) * length;
-            scars.add(new Scar(x, z, nx, nz, width));
-            growScar(nx, nz, a, length * 0.78, width * 0.8f, depth + 1, r);
-            if (r.nextFloat() < 0.55f) {
-                growScar(nx, nz, a + (r.nextBoolean() ? 0.7 : -0.7), length * 0.6, width * 0.6f, depth + 1, r);
-            }
         }
 
         int life() {
-            return groundY != null ? SCORCH_LIFE : FLASH_LIFE;
+            return FLASH_LIFE;
         }
     }
 
     private static final List<Strike> STRIKES = new ArrayList<>();
-    private static int chargeAge;
 
     private BoltFx() {
     }
@@ -152,6 +125,9 @@ public final class BoltFx {
             }
         }
         STRIKES.add(new Strike(start, end, seed, hitEntity, new ArrayList<>(chain), groundY, victimId));
+        if (groundY != null) {
+            GroundMarks.bolt(new Vec3(end.x, groundY, end.z), seed);
+        }
 
         // Impact debris
         FxParticles.sparkBurst(end.x, end.y, end.z, 34, 0.55, SPARK_COLOR, mc.level.random);
@@ -205,7 +181,7 @@ public final class BoltFx {
     }
 
     /** Midpoint-displacement lightning path. */
-    static List<Vec3> jagged(Vec3 a, Vec3 b, double displacement, Random random) {
+    public static List<Vec3> jagged(Vec3 a, Vec3 b, double displacement, Random random) {
         List<Vec3> points = new ArrayList<>();
         points.add(a);
         subdivide(a, b, displacement, random, points);
@@ -243,13 +219,9 @@ public final class BoltFx {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
             STRIKES.clear();
-            chargeAge = 0;
             return;
         }
         if (mc.isPaused()) return;
-
-        chargeAge = isChargingBolt() ? chargeAge + 1 : 0;
-        if (chargeAge > 0) tickCharge(mc);
 
         Iterator<Strike> it = STRIKES.iterator();
         while (it.hasNext()) {
@@ -264,45 +236,8 @@ public final class BoltFx {
                 mc.level.addParticle(ParticleTypes.ELECTRIC_SPARK, s.end.x, s.end.y + 0.2, s.end.z,
                         (mc.level.random.nextDouble() - 0.5) * 0.3, 0.1, (mc.level.random.nextDouble() - 0.5) * 0.3);
             }
-            // The scorch smoulders
-            if (s.groundY != null && s.age < 50 && s.age % 3 == 0 && !s.scars.isEmpty()) {
-                Scar scar = s.scars.get(mc.level.random.nextInt(s.scars.size()));
-                mc.level.addParticle(ParticleTypes.SMOKE, scar.x2(), s.groundY + 0.05, scar.z2(), 0, 0.02, 0);
-            }
             if (s.age >= s.life()) it.remove();
         }
-    }
-
-    private static boolean isChargingBolt() {
-        Spell spell = ClientMagicData.getChannelingSpell();
-        return ClientMagicData.isChanneling() && spell != null && spell.getId().equals(BoltSpell.ID);
-    }
-
-    /** Energy motes drawn in from the air toward the caster's hand. */
-    private static void tickCharge(Minecraft mc) {
-        if (mc.player == null) return;
-        float progress = ClientMagicData.isReadyToCast() ? 1.0f : ClientMagicData.getChannelProgress();
-        Vec3 hand = handPosition(mc, 1.0f);
-        int count = 1 + (int) (progress * 3);
-        for (int i = 0; i < count; i++) {
-            double a = mc.level.random.nextDouble() * Math.PI * 2.0;
-            double b = (mc.level.random.nextDouble() - 0.5) * Math.PI;
-            double r = 1.2 + mc.level.random.nextDouble() * 0.8;
-            Vec3 p = hand.add(Math.cos(a) * Math.cos(b) * r, Math.sin(b) * r, Math.sin(a) * Math.cos(b) * r);
-            Vec3 v = hand.subtract(p).scale(0.12);
-            FxParticles.spawn(FxParticles.Kind.SPARK).at(p.x, p.y, p.z).vel(v.x, v.y, v.z)
-                    .color(MID[0], MID[1], MID[2]).size(0.015f + 0.015f * progress).life(8).physics(0, 1.0, 0).noCollide();
-        }
-    }
-
-    /** Approximate world position of the caster's casting hand (matches the server bolt origin). */
-    private static Vec3 handPosition(Minecraft mc, float partialTick) {
-        Vec3 eye = mc.player.getEyePosition(partialTick);
-        Vec3 look = mc.player.getViewVector(partialTick);
-        Vec3 right = look.cross(new Vec3(0, 1, 0));
-        right = right.lengthSqr() < 1.0E-4 ? new Vec3(1, 0, 0) : right.normalize();
-        double side = mc.player.getMainArm() == HumanoidArm.RIGHT ? 0.28 : -0.28;
-        return eye.add(look.scale(0.55)).add(right.scale(side)).add(0, -0.2, 0);
     }
 
     // ------------------------------------------------------------------
@@ -345,13 +280,10 @@ public final class BoltFx {
 
     @SubscribeEvent
     public static void onRender(RenderLevelStageEvent event) {
-        if ((STRIKES.isEmpty() && chargeAge == 0) || !FxDraw.begin(event)) return;
+        if (STRIKES.isEmpty() || !FxDraw.begin(event)) return;
         float pt = FxDraw.partialTick();
         for (Strike s : STRIKES) {
             renderStrike(s, s.age + pt);
-        }
-        if (chargeAge > 0) {
-            renderCharge(chargeAge + pt, pt);
         }
         FxDraw.end();
     }
@@ -370,7 +302,6 @@ public final class BoltFx {
     }
 
     private static void renderStrike(Strike s, float t) {
-        renderScorch(s, t);
         if (t > FLASH_LIFE) return;
 
         // 1. Stepped leader: a faint branching channel racing toward the target
@@ -388,7 +319,6 @@ public final class BoltFx {
                     FxDraw.glow(tip.x, tip.y, tip.z, 0.5, MID[0], MID[1], MID[2], 0.8f);
                 }
             }
-            FxDraw.glow(s.start.x, s.start.y, s.start.z, 0.5, MID[0], MID[1], MID[2], 0.7f);
             return;
         }
 
@@ -410,9 +340,7 @@ public final class BoltFx {
             drawStrands(s.chainStrokes.get(i).get(ls), Math.min(1.0f, strokeIntensity(lt + STROKE_TICKS[0], ls) * flicker), 1.0f, OUTER);
         }
 
-        // 4. Flares at both ends
-        FxDraw.glow(s.start.x, s.start.y, s.start.z, 0.8 * intensity + 0.2, MID[0], MID[1], MID[2], 0.8f * intensity);
-        FxDraw.glow(s.start.x, s.start.y, s.start.z, 0.25, 1, 1, 1, intensity);
+        // 4. Impact flare (no flash at the caster's hand)
         FxDraw.glow(s.end.x, s.end.y, s.end.z, 1.2 + 2.8 * intensity, OUTER[0], OUTER[1], OUTER[2], 0.55f * intensity);
         FxDraw.glow(s.end.x, s.end.y, s.end.z, 0.3 + 1.0 * intensity, 1, 1, 1, 0.95f * intensity);
 
@@ -421,29 +349,6 @@ public final class BoltFx {
         if (ringT < 1.0f) {
             Vec3[] basis = FxDraw.basis(s.end.subtract(s.start));
             FxDraw.ring(s.end, basis[0], basis[1], 0.2 + ringT * 2.8, 0.4, MID[0], MID[1], MID[2], 0.7f * (1.0f - ringT), 32);
-        }
-
-        // 6. Ground: expanding ring and arcs crawling over the surface
-        if (s.groundY != null) {
-            double gy = s.groundY + 0.04;
-            float gT = Mth.clamp((t - STROKE_TICKS[0]) / 12.0f, 0.0f, 1.0f);
-            FxDraw.flatRing(s.end.x, gy, s.end.z, 0.3 + gT * 3.6, 0.55, OUTER[0], OUTER[1], OUTER[2], 0.65f * (1.0f - gT), 36);
-            if (t < 15) {
-                Random arcRandom = new Random(s.seed ^ ((long) (t * 2) * 341873128712L));
-                float arcAlpha = 0.9f * (1.0f - t / 15.0f);
-                for (int a = 0; a < 7; a++) {
-                    double angle = arcRandom.nextDouble() * Math.PI * 2.0;
-                    double length = 0.8 + arcRandom.nextDouble() * 2.6;
-                    Vec3 from = new Vec3(s.end.x, gy, s.end.z);
-                    Vec3 to = from.add(Math.cos(angle) * length, 0, Math.sin(angle) * length);
-                    List<Vec3> path = jagged(from, to, length * 0.25, arcRandom);
-                    for (int p = 0; p + 1 < path.size(); p++) {
-                        Vec3 p0 = path.get(p), p1 = path.get(p + 1);
-                        FxDraw.groundLine(p0.x, p0.z, p1.x, p1.z, gy, 0.12, MID[0], MID[1], MID[2], arcAlpha);
-                        FxDraw.groundLine(p0.x, p0.z, p1.x, p1.z, gy + 0.005, 0.04, 1, 1, 1, arcAlpha);
-                    }
-                }
-            }
         }
 
         // 7. Electrified outline crackling over the victim
@@ -472,23 +377,6 @@ public final class BoltFx {
         }
     }
 
-    /** Lichtenberg scorch: white-hot at first, cooling through orange to dull red. */
-    private static void renderScorch(Strike s, float t) {
-        if (s.groundY == null || t < STROKE_TICKS[0]) return;
-        float k = Mth.clamp((t - STROKE_TICKS[0]) / (SCORCH_LIFE - STROKE_TICKS[0]), 0.0f, 1.0f);
-        float heat = 1.0f - k;
-        float r = 1.0f;
-        float g = Mth.clamp(0.25f + 0.75f * heat * heat, 0.0f, 1.0f);
-        float b = Mth.clamp(heat * heat * heat, 0.0f, 1.0f);
-        float alpha = heat * (0.7f + 0.3f * (float) Math.sin(t * 0.8));
-        double y = s.groundY + 0.03;
-        for (Scar scar : s.scars) {
-            FxDraw.groundLine(scar.x1(), scar.z1(), scar.x2(), scar.z2(), y, scar.width() * 2.5, r, g * 0.7f, b * 0.5f, 0.35f * alpha);
-            FxDraw.groundLine(scar.x1(), scar.z1(), scar.x2(), scar.z2(), y + 0.003, scar.width(), r, g, b, alpha);
-        }
-        FxDraw.flatDisc(s.end.x, y, s.end.z, 1.4, r, g, b, 0.45f * alpha, 20);
-    }
-
     /** Jittering electric edges around an entity's bounding box. */
     private static void outlineCrackle(Entity victim, long seed, float t, float alpha) {
         AABB box = victim.getBoundingBox().inflate(0.08);
@@ -509,38 +397,6 @@ public final class BoltFx {
         }
         Vec3 c = box.getCenter();
         FxDraw.glow(c.x, c.y, c.z, victim.getBbHeight() * 0.9, OUTER[0], OUTER[1], OUTER[2], 0.35f * alpha);
-    }
-
-    /** Charge gathering in the hand: a growing orb with tiny arcs dancing around it. */
-    private static void renderCharge(float t, float pt) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return;
-        boolean ready = ClientMagicData.isReadyToCast();
-        float progress = ready ? 1.0f : ClientMagicData.getChannelProgress();
-        Vec3 hand = handPosition(mc, pt);
-        boolean firstPerson = mc.options.getCameraType().isFirstPerson();
-        double scale = firstPerson ? 0.45 : 1.0;
-        float flicker = 0.8f + 0.2f * (float) Math.sin(t * 2.3);
-
-        FxDraw.glow(hand.x, hand.y, hand.z, (0.15 + 0.3 * progress) * scale, OUTER[0], OUTER[1], OUTER[2], (0.35f + 0.4f * progress) * flicker);
-        FxDraw.glow(hand.x, hand.y, hand.z, (0.05 + 0.08 * progress) * scale, 1, 1, 1, 0.9f * flicker);
-
-        Random random = new Random((long) (t * 3) * 92821L);
-        int arcs = 1 + (int) (progress * 4);
-        for (int i = 0; i < arcs; i++) {
-            Vec3 dir = new Vec3(random.nextDouble() - 0.5, random.nextDouble() - 0.5, random.nextDouble() - 0.5).normalize();
-            Vec3 end = hand.add(dir.scale((0.12 + 0.35 * progress) * scale));
-            List<Vec3> path = jagged(hand, end, 0.06 * scale, random);
-            for (int p = 0; p + 1 < path.size(); p++) {
-                FxDraw.beam(path.get(p), path.get(p + 1), 0.05 * scale, MID[0], MID[1], MID[2], 0.85f);
-                FxDraw.beam(path.get(p), path.get(p + 1), 0.015 * scale, 1, 1, 1, 1.0f);
-            }
-        }
-        if (ready) {
-            // Fully charged: a crackling ring orbits the hand
-            Vec3[] basis = FxDraw.basis(mc.player.getViewVector(pt));
-            FxDraw.ring(hand, basis[0], basis[1], 0.3 * scale, 0.05 * scale, MID[0], MID[1], MID[2], 0.7f * flicker, 20);
-        }
     }
 
     private static void drawStrands(List<Strand> strands, float intensity, float widthScale, float[] outer) {

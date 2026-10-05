@@ -93,6 +93,18 @@ public class FlashSpell extends Spell {
         Vec3 end = eye.add(look.scale(range));
         ClipContext.Fluid fluid = SpellTargeting.aimFluidMode(level, eye);
         BlockHitResult hit = level.clip(new ClipContext(eye, end, ClipContext.Block.COLLIDER, fluid, player));
+        Vec3 rayEnd = hit.getType() == HitResult.Type.BLOCK ? hit.getLocation() : end;
+
+        // A creature under the crosshair: land exactly where it stands (and swap places with it)
+        LivingEntity aimed = aimedCreature(level, player, eye, rayEnd);
+        if (aimed != null) {
+            for (double up = 0.0; up <= 1.0; up += 0.25) {
+                Vec3 spot = aimed.position().add(0, up, 0);
+                if (fits(level, player, spot)) {
+                    return spot;
+                }
+            }
+        }
 
         double halfWidth = player.getBbWidth() / 2.0;
         double height = player.getBbHeight();
@@ -106,13 +118,20 @@ public class FlashSpell extends Spell {
                 // Aiming at a ceiling: hang just below it
                 candidate = loc.subtract(0, height + 0.05, 0);
             } else {
-                // Aiming at a wall: step out of it and land on the floor in front of it
-                Vec3 out = loc.add(face.getStepX() * (halfWidth + 0.05), 0, face.getStepZ() * (halfWidth + 0.05));
-                candidate = snapDown(level, player, out, 3.5, fluid, out.subtract(0, height * 0.5, 0));
+                Vec3 ledge = ledgeTop(level, player, hit);
+                if (ledge != null) {
+                    // Aiming at the side of a step or low wall: climb on top of it
+                    candidate = ledge;
+                } else {
+                    // A tall wall: land on the floor right in front of it
+                    Vec3 out = loc.add(face.getStepX() * (halfWidth + 0.05), 0, face.getStepZ() * (halfWidth + 0.05));
+                    candidate = snapDown(level, player, out, range, fluid, out.subtract(0, height * 0.5, 0));
+                }
             }
         } else {
+            // Nothing in reach: the farthest point of the ray, brought down to the ground beneath it
             Vec3 feet = end.subtract(0, player.getEyeHeight(), 0);
-            candidate = snapDown(level, player, feet, 2.5, fluid, feet);
+            candidate = snapDown(level, player, feet.add(0, player.getEyeHeight(), 0), range + player.getEyeHeight(), fluid, feet);
         }
 
         // Find the nearest spot where the body fits, backing off towards the caster if needed
@@ -134,6 +153,41 @@ public class FlashSpell extends Spell {
         return null;
     }
 
+    @Nullable
+    private static LivingEntity aimedCreature(Level level, Player player, Vec3 eye, Vec3 rayEnd) {
+        LivingEntity best = null;
+        double bestDist = eye.distanceToSqr(rayEnd);
+        for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, new AABB(eye, rayEnd).inflate(1.0),
+                e -> e != player && e.isAlive() && !e.isSpectator() && !e.isPassenger())) {
+            java.util.Optional<Vec3> clip = e.getBoundingBox().inflate(0.3).clip(eye, rayEnd);
+            if (clip.isPresent() && eye.distanceToSqr(clip.get()) < bestDist) {
+                bestDist = eye.distanceToSqr(clip.get());
+                best = e;
+            }
+        }
+        return best;
+    }
+
+    /** Top of the block whose side was hit, if it is low enough to step onto (and there is room up there). */
+    @Nullable
+    private static Vec3 ledgeTop(Level level, Player player, BlockHitResult hit) {
+        net.minecraft.core.BlockPos pos = hit.getBlockPos();
+        net.minecraft.world.phys.shapes.VoxelShape shape = level.getBlockState(pos).getCollisionShape(level, pos);
+        double top = pos.getY() + (shape.isEmpty() ? 1.0 : shape.max(Direction.Axis.Y));
+        Vec3 loc = hit.getLocation();
+        if (top - loc.y > 1.3) {
+            return null;
+        }
+        Direction face = hit.getDirection();
+        for (double in = 0.35; in <= 0.75; in += 0.2) {
+            Vec3 spot = new Vec3(loc.x - face.getStepX() * in, top, loc.z - face.getStepZ() * in);
+            if (fits(level, player, spot)) {
+                return spot;
+            }
+        }
+        return null;
+    }
+
     private static Vec3 snapDown(Level level, Player player, Vec3 from, double maxDrop, ClipContext.Fluid fluid, Vec3 fallback) {
         Vec3 ground = SpellTargeting.dropToGround(level, from.add(0, 0.05, 0), player, fluid);
         if (ground != null && from.y - ground.y <= maxDrop) {
@@ -148,23 +202,28 @@ public class FlashSpell extends Spell {
     }
 
     /**
-     * Creature standing at the destination, which will swap places with the caster.
+     * Creature standing at (or right next to) the destination, which will swap places with the caster.
      */
     @Nullable
     public static LivingEntity findSwapTarget(Level level, Player player, Vec3 dest) {
-        AABB box = player.getBoundingBox().move(dest.subtract(player.position())).inflate(0.2);
+        AABB box = new AABB(dest.x - SWAP_RADIUS, dest.y - 1.0, dest.z - SWAP_RADIUS,
+                dest.x + SWAP_RADIUS, dest.y + player.getBbHeight() + 0.5, dest.z + SWAP_RADIUS);
         LivingEntity best = null;
         double bestDist = Double.MAX_VALUE;
         for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, box,
                 e -> e != player && e.isAlive() && !e.isSpectator() && !e.isPassenger())) {
-            double d = entity.position().distanceToSqr(dest);
-            if (d < bestDist) {
+            double dx = entity.getX() - dest.x, dz = entity.getZ() - dest.z;
+            double d = dx * dx + dz * dz;
+            if (d <= SWAP_RADIUS * SWAP_RADIUS && d < bestDist) {
                 bestDist = d;
                 best = entity;
             }
         }
         return best;
     }
+
+    /** How close to the destination a creature has to be to swap places with the caster. */
+    private static final double SWAP_RADIUS = 1.6;
 
     // ------------------------------------------------------------------
     // Cast

@@ -210,6 +210,9 @@ public class ClientFallingSwordRenderer {
                     mc.level.playLocalSound(strike.targetPos.x, strike.obstacleY + 1.0, strike.targetPos.z,
                             SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 2.0f, 0.5f, false);
                 } else if (strike.ticks == 34) {
+                    com.cesar.magicandsorcery.client.fx.GroundMarks.crater(
+                            new Vec3(strike.targetPos.x, strike.obstacleY, strike.targetPos.z),
+                            strike.casterId * 31L + (long) (strike.targetPos.x * 7) + (long) (strike.targetPos.z * 13));
                     // Giant sword impact: play SwordExplosion audio
                     mc.level.playLocalSound(strike.targetPos.x, strike.obstacleY, strike.targetPos.z,
                             com.cesar.magicandsorcery.sound.ModSounds.SWORD_EXPLOSION.get(), SoundSource.PLAYERS, 4.0f, 1.0f, false);

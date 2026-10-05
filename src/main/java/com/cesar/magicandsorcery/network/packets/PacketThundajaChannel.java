@@ -55,7 +55,7 @@ public class PacketThundajaChannel {
             Vec3 target = new Vec3(targetX, targetY, targetZ);
             if (action == ACTION_START) {
                 ThundajaSpell.setPlayerChannelTarget(sender.getId(), target);
-                ThundajaSpell.onChannelStart(sender.serverLevel());
+                ThundajaSpell.onChannelStart(sender.serverLevel(), sender.getUUID());
                 // Broadcast to other players nearby so they see the storm gathering
                 ModNetwork.sendToNearby(
                         new PacketThundajaStormState(sender.getId(), ACTION_START, target),
@@ -73,7 +73,7 @@ public class PacketThundajaChannel {
                 );
             } else if (action == ACTION_CANCEL) {
                 ThundajaSpell.clearPlayerChannelTarget(sender.getId());
-                ThundajaSpell.onChannelEnd(sender.serverLevel());
+                ThundajaSpell.onChannelEnd(sender.serverLevel(), sender.getUUID());
                 ModNetwork.sendToNearby(
                         new PacketThundajaStormState(sender.getId(), ACTION_CANCEL, Vec3.ZERO),
                         sender.serverLevel(),

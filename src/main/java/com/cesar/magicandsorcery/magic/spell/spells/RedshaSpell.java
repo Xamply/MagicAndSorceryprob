@@ -82,8 +82,13 @@ public class RedshaSpell extends Spell {
      * Seal center for a caster looking ahead (shared with the client preview).
      */
     public static Vec3 placement(Level level, Entity caster) {
-        Vec3 eye = caster.getEyePosition();
-        Vec3 look = caster.getViewVector(1.0f);
+        return placement(level, caster, 1.0f);
+    }
+
+    /** Same as {@link #placement(Level, Entity)} at a render partial tick (smooth client preview). */
+    public static Vec3 placement(Level level, Entity caster, float partialTick) {
+        Vec3 eye = caster.getEyePosition(partialTick);
+        Vec3 look = caster.getViewVector(partialTick);
         Vec3 wanted = eye.add(look.scale(PLACE_DISTANCE));
         BlockHitResult hit = level.clip(new ClipContext(eye, wanted, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, caster));
         if (hit.getType() != HitResult.Type.MISS) {

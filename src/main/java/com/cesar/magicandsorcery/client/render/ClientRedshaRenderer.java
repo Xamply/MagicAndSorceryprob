@@ -377,8 +377,10 @@ public class ClientRedshaRenderer {
     private static void renderPreview(Entity caster, float progress, float t) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
-        Vec3 center = RedshaSpell.placement(mc.level, caster);
-        Vec3 forward = caster.getViewVector(1.0f).normalize();
+        // Interpolated with the frame so the seal stays glued to the view while walking (no jitter)
+        float pt = FxDraw.partialTick();
+        Vec3 center = RedshaSpell.placement(mc.level, caster, pt);
+        Vec3 forward = caster.getViewVector(pt).normalize();
         Vec3 right = forward.cross(new Vec3(0, 1, 0));
         right = right.lengthSqr() < 1e-4 ? new Vec3(1, 0, 0) : right.normalize();
         Vec3 up = right.cross(forward).normalize();

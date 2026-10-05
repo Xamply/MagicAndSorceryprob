@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.Mth;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
@@ -50,35 +51,39 @@ public class ClientThundajaRenderer {
 
     private static final List<ActiveStorm> ACTIVE_STORMS = new ArrayList<>();
 
-    // Weather & Atmosphere synchronization
-    private static boolean hasBaselineWeather = false;
-    private static float baselineRain = 0.0f;
-    private static float baselineThunder = 0.0f;
-
-    private static float currentRainLevel = 0.0f;
-    private static float currentThunderLevel = 0.0f;
+    // Weather & atmosphere: a single smoothed storm factor drives rain, thunder, fog and ambience.
+    // While it is above zero the client's rain/thunder levels are overridden; at zero they go back to
+    // exactly what the server last sent, so the rain can never get stuck.
+    private static float weatherFactor = 0.0f;
     private static float currentStormFactor = 0.0f;
+    private static boolean overridingWeather = false;
+    private static float baseRain = 0.0f;
+    private static float baseThunder = 0.0f;
+    private static float lastSetRain = -1.0f;
+    private static float lastSetThunder = -1.0f;
 
-    // Smooth fade-out state
-    private static boolean isFadingOut = false;
-    private static int fadeOutTicks = 0;
-    private static int maxFadeOutTicks = 80;
-    private static float fadeOutStartRain = 0.0f;
-    private static float fadeOutStartThunder = 0.0f;
-    private static float fadeOutStartFactor = 0.0f;
+    /** A storm that never got an impact or cancel (rejected cast, lost packet) is dropped after this. */
+    private static final int MAX_STORM_TICKS = 300 + 100;
+
+    /** Distant lightning flashing in the sky around the viewer while the storm builds. */
+    private static final class SkyBolt {
+        final Vec3 top;
+        final Vec3 bottom;
+        final long seed;
+        int age;
+
+        SkyBolt(Vec3 top, Vec3 bottom, long seed) {
+            this.top = top;
+            this.bottom = bottom;
+            this.seed = seed;
+        }
+    }
+
+    private static final List<SkyBolt> SKY_BOLTS = new ArrayList<>();
+    /** Thunder still travelling to the listener: {ticks left, x, y, z, pitch*1000}. */
+    private static final List<double[]> PENDING_THUNDER = new ArrayList<>();
 
     public static void startStorm(int casterId, Vec3 targetPos) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level != null && !hasBaselineWeather) {
-            baselineRain = mc.level.getRainLevel(1.0f);
-            baselineThunder = mc.level.getThunderLevel(1.0f);
-            currentRainLevel = baselineRain;
-            currentThunderLevel = baselineThunder;
-            hasBaselineWeather = true;
-        }
-        isFadingOut = false;
-        fadeOutTicks = 0;
-
         synchronized (ACTIVE_STORMS) {
             ActiveStorm existing = null;
             for (ActiveStorm s : ACTIVE_STORMS) {
@@ -109,16 +114,13 @@ public class ClientThundajaRenderer {
 
     public static void cancelStorm(int casterId) {
         synchronized (ACTIVE_STORMS) {
-            ACTIVE_STORMS.removeIf(s -> s.casterId == casterId);
-            if (ACTIVE_STORMS.isEmpty() && hasBaselineWeather && !isFadingOut) {
-                // Return smoothly to baseline weather over 3 seconds (60 ticks)
-                startFadeOut(60);
-            }
+            ACTIVE_STORMS.removeIf(s -> s.casterId == casterId && !s.isImpacted);
         }
     }
 
     public static void triggerImpact(int casterId, Vec3 targetPos, long seed) {
         Minecraft mc = Minecraft.getInstance();
+        com.cesar.magicandsorcery.client.fx.GroundMarks.thundaja(targetPos, seed);
         if (mc.level != null) {
             // Blinding full-sky lightning flash at moment of impact
             mc.level.setSkyFlashTime(6);
@@ -162,62 +164,25 @@ public class ClientThundajaRenderer {
         triggerImpact(-1, targetPos, seed);
     }
 
-    private static void startFadeOut(int durationTicks) {
-        isFadingOut = true;
-        fadeOutTicks = 0;
-        maxFadeOutTicks = Math.max(1, durationTicks);
-        fadeOutStartRain = currentRainLevel;
-        fadeOutStartThunder = currentThunderLevel;
-        fadeOutStartFactor = currentStormFactor;
-    }
-
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
-            hasBaselineWeather = false;
-            isFadingOut = false;
-            ACTIVE_STORMS.clear();
-            return;
-        }
-
-        if (ACTIVE_STORMS.isEmpty() && !isFadingOut) {
-            return;
-        }
-
-        // 1. Handle Smooth Weather & Fog Fade-Out (cancellation or post-impact return to baseline)
-        if (isFadingOut) {
-            fadeOutTicks++;
-            float progress = Math.min(1.0f, (float) fadeOutTicks / (float) maxFadeOutTicks);
-            // Smooth Hermite ease-out curve
-            float ease = progress * progress * (3.0f - 2.0f * progress);
-
-            currentRainLevel = fadeOutStartRain + (baselineRain - fadeOutStartRain) * ease;
-            currentThunderLevel = fadeOutStartThunder + (baselineThunder - fadeOutStartThunder) * ease;
-            currentStormFactor = fadeOutStartFactor * (1.0f - ease);
-
-            mc.level.setRainLevel(currentRainLevel);
-            mc.level.setThunderLevel(currentThunderLevel);
-
-            if (fadeOutTicks >= maxFadeOutTicks) {
-                mc.level.setRainLevel(baselineRain);
-                mc.level.setThunderLevel(baselineThunder);
-                currentRainLevel = baselineRain;
-                currentThunderLevel = baselineThunder;
-                currentStormFactor = 0.0f;
-                isFadingOut = false;
-                hasBaselineWeather = false;
+            synchronized (ACTIVE_STORMS) {
+                ACTIVE_STORMS.clear();
             }
+            SKY_BOLTS.clear();
+            PENDING_THUNDER.clear();
+            weatherFactor = 0.0f;
+            currentStormFactor = 0.0f;
+            overridingWeather = false;
             return;
         }
+        if (mc.isPaused()) return;
 
-        // 2. Process Active Storms
-        int maxActiveTicks = 0;
-        boolean anyActive = false;
-        boolean anyImpacted = false;
-
+        float target = 0.0f;
         synchronized (ACTIVE_STORMS) {
             Iterator<ActiveStorm> iterator = ACTIVE_STORMS.iterator();
             while (iterator.hasNext()) {
@@ -225,113 +190,151 @@ public class ClientThundajaRenderer {
 
                 if (storm.isImpacted) {
                     storm.impactTicks++;
-                    anyImpacted = true;
                     if (storm.impactTicks > 24) { // 1.2s flash & dissipation
                         iterator.remove();
                         continue;
                     }
+                    target = 1.0f;
                 } else {
-                    boolean isLocalCaster = (mc.player != null && storm.casterId == mc.player.getId());
+                    boolean isLocalCaster = mc.player != null && storm.casterId == mc.player.getId();
                     if (isLocalCaster) {
-                        // The local player's storm remains active strictly while channeling
-                        if (!ClientMagicData.isChanneling()) {
+                        // The local player's storm remains active strictly while channeling Thundaja
+                        com.cesar.magicandsorcery.magic.spell.Spell channeling = ClientMagicData.getChannelingSpell();
+                        if (!ClientMagicData.isChanneling() || channeling == null
+                                || !channeling.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.ThundajaSpell.ID)) {
                             iterator.remove();
                             continue;
                         }
-
-                        // Continuously track ground target where the cursor is looking
+                        // Continuously track the ground target under the cursor
                         Vec3 newTarget = com.cesar.magicandsorcery.magic.spell.spells.ThundajaSpell.findThundajaGroundTarget(
                                 mc.level, mc.player, 36.0);
                         storm.targetPos = newTarget;
-
-                        // Sync to server every 2 ticks during channeling (10 times per second)
                         if (storm.ticksActive % 2 == 0) {
                             com.cesar.magicandsorcery.network.ModNetwork.sendToServer(
                                     new com.cesar.magicandsorcery.network.packets.PacketThundajaChannel(
                                             com.cesar.magicandsorcery.network.packets.PacketThundajaChannel.ACTION_UPDATE,
-                                            newTarget
-                                    )
-                            );
+                                            newTarget));
                         }
-                    } else if (storm.casterId != -1) {
-                        // Remote player: verify entity still exists in client world
-                        if (mc.level.getEntity(storm.casterId) == null && storm.ticksActive > 100) {
-                            iterator.remove();
-                            continue;
-                        }
+                    } else if ((mc.level.getEntity(storm.casterId) == null && storm.ticksActive > 100)
+                            || storm.ticksActive > MAX_STORM_TICKS) {
+                        // Remote caster gone, or the cast never resolved
+                        iterator.remove();
+                        continue;
                     }
-
                     storm.ticksActive++;
-                    anyActive = true;
-                    if (storm.ticksActive > maxActiveTicks) {
-                        maxActiveTicks = storm.ticksActive;
-                    }
+                    target = Math.max(target, stageFactor(storm.ticksActive));
                 }
-
-                // Tick Particle & Audio Progression
                 tickStormEffects(mc, storm);
             }
-
-            // If all storms just completed impact dissipation, smoothly return to baseline over 4 seconds (80 ticks)
-            if (ACTIVE_STORMS.isEmpty() && hasBaselineWeather && !isFadingOut) {
-                startFadeOut(80);
-            }
         }
 
-        // 3. Compute Progressive Weather and Atmospheric Storm Factor across the 5 Stages
-        if (anyActive) {
-            int t = maxActiveTicks;
-            if (t < 60) {
-                // Etapa 1: 0 - 3s (0 - 60 ticks) - Primera alteración del cielo, nubes iniciales, luz disminuye muy sutilmente
-                float p = t / 60.0f;
-                currentStormFactor = 0.15f * p;
-                currentRainLevel = Math.max(baselineRain, 0.15f * p);
-                currentThunderLevel = baselineThunder;
-            } else if (t < 140) {
-                // Etapa 2: 3 - 7s (60 - 140 ticks) - Cielo encapotado, gris más oscuro, luz ambiental desciende notablemente
-                float p = (t - 60.0f) / 80.0f;
-                currentStormFactor = 0.15f + 0.30f * p;
-                currentRainLevel = Math.max(baselineRain, 0.15f + 0.35f * p);
-                currentThunderLevel = Math.max(baselineThunder, 0.20f * p);
-            } else if (t < 220) {
-                // Etapa 3: 7 - 11s (140 - 220 ticks) - Comienza la lluvia en el mundo, nubes densas, truenos lejanos
-                float p = (t - 140.0f) / 80.0f;
-                currentStormFactor = 0.45f + 0.30f * p;
-                currentRainLevel = Math.max(baselineRain, 0.50f + 0.35f * p);
-                currentThunderLevel = Math.max(baselineThunder, 0.20f + 0.40f * p);
-            } else if (t < 280) {
-                // Etapa 4: 11 - 14s (220 - 280 ticks) - Tormenta eléctrica completa, lluvia pesada, relámpagos iluminando cielo
-                float p = (t - 220.0f) / 60.0f;
-                currentStormFactor = 0.75f + 0.20f * p;
-                currentRainLevel = Math.max(baselineRain, 0.85f + 0.15f * p);
-                currentThunderLevel = Math.max(baselineThunder, 0.60f + 0.35f * p);
+        // Builds up with the storm, dies down smoothly (4 s) once it is over
+        if (target > weatherFactor) {
+            weatherFactor = Math.min(target, weatherFactor + 0.05f);
+        } else {
+            weatherFactor = Math.max(target, weatherFactor - 1.0f / 80.0f);
+        }
+        currentStormFactor = weatherFactor;
+        applyWeather(mc);
+        tickAmbience(mc);
+    }
 
-                // Relámpagos intermitentes iluminando el cielo completo
-                if (t == 235 || t == 265) {
-                    mc.level.setSkyFlashTime(2);
-                }
+    /** Storm strength through the five channel stages (0..1). */
+    private static float stageFactor(int t) {
+        if (t < 60) return 0.18f * (t / 60.0f);
+        if (t < 140) return 0.18f + 0.30f * ((t - 60.0f) / 80.0f);
+        if (t < 220) return 0.48f + 0.30f * ((t - 140.0f) / 80.0f);
+        if (t < 280) return 0.78f + 0.22f * ((t - 220.0f) / 60.0f);
+        return 1.0f;
+    }
+
+    private static void applyWeather(Minecraft mc) {
+        if (weatherFactor > 0.001f) {
+            float rainNow = mc.level.getRainLevel(1.0f);
+            float thunderNow = mc.level.getThunderLevel(1.0f);
+            if (!overridingWeather) {
+                baseRain = rainNow;
+                baseThunder = thunderNow;
+                overridingWeather = true;
             } else {
-                // Etapa 5: 14s en adelante (280+ ticks) — Clímax continuo que persiste hasta soltar la tecla o cancelar
-                currentStormFactor = 1.0f;
-                currentRainLevel = 1.0f;
-                currentThunderLevel = 1.0f;
-
-                // Destello blanco previo en el cielo al segundo 14.75 (tick 295)
-                // y relámpagos periódicos en el cielo si se mantiene extendida la canalización (t >= 300)
-                if (t == 295 || (t > 300 && t % 45 == 0)) {
-                    mc.level.setSkyFlashTime(2);
-                }
+                // The server changed the weather meanwhile: that is the new value to return to
+                if (Math.abs(rainNow - lastSetRain) > 1.0E-4f) baseRain = rainNow;
+                if (Math.abs(thunderNow - lastSetThunder) > 1.0E-4f) baseThunder = thunderNow;
             }
-
-            mc.level.setRainLevel(currentRainLevel);
-            mc.level.setThunderLevel(currentThunderLevel);
-        } else if (anyImpacted) {
-            currentStormFactor = 1.0f;
-            currentRainLevel = 1.0f;
-            currentThunderLevel = 1.0f;
-            mc.level.setRainLevel(currentRainLevel);
-            mc.level.setThunderLevel(currentThunderLevel);
+            lastSetRain = Math.max(baseRain, Math.min(1.0f, weatherFactor * 1.2f));
+            lastSetThunder = Math.max(baseThunder, Mth.clamp((weatherFactor - 0.15f) / 0.85f, 0.0f, 1.0f));
+            mc.level.setRainLevel(lastSetRain);
+            mc.level.setThunderLevel(lastSetThunder);
+        } else if (overridingWeather) {
+            mc.level.setRainLevel(baseRain);
+            mc.level.setThunderLevel(baseThunder);
+            overridingWeather = false;
+            lastSetRain = -1.0f;
+            lastSetThunder = -1.0f;
         }
+    }
+
+    /**
+     * The whole sky turns into an electrical storm: lightning flashing in the distance, rolling thunder
+     * that arrives late with distance, and static crackling in the air around the viewer.
+     */
+    private static void tickAmbience(Minecraft mc) {
+        Iterator<SkyBolt> bolts = SKY_BOLTS.iterator();
+        while (bolts.hasNext()) {
+            if (++bolts.next().age > 7) bolts.remove();
+        }
+        Iterator<double[]> thunder = PENDING_THUNDER.iterator();
+        while (thunder.hasNext()) {
+            double[] t = thunder.next();
+            if (--t[0] <= 0) {
+                mc.level.playLocalSound(t[1], t[2], t[3], SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
+                        6.0f, (float) (t[4] / 1000.0), false);
+                thunder.remove();
+            }
+        }
+        if (mc.player == null || weatherFactor < 0.25f) return;
+
+        net.minecraft.util.RandomSource random = mc.level.random;
+        float f = weatherFactor;
+        if (random.nextFloat() < 0.008f + 0.05f * f * f) {
+            double angle = random.nextDouble() * Math.PI * 2.0;
+            double dist = 45.0 + random.nextDouble() * 70.0;
+            double x = mc.player.getX() + Math.cos(angle) * dist;
+            double z = mc.player.getZ() + Math.sin(angle) * dist;
+            double groundY = Math.max(mc.player.getY() - 12.0,
+                    mc.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, (int) Math.floor(x), (int) Math.floor(z)));
+            double topY = Math.max(mc.player.getY(), groundY) + 70.0 + random.nextDouble() * 25.0;
+            SKY_BOLTS.add(new SkyBolt(new Vec3(x, topY, z), new Vec3(x + (random.nextDouble() - 0.5) * 20.0, groundY, z + (random.nextDouble() - 0.5) * 20.0),
+                    random.nextLong()));
+            mc.level.setSkyFlashTime(2);
+            // Sound travels ~17 blocks per tick
+            PENDING_THUNDER.add(new double[]{Math.max(1, dist / 17.0), x, groundY + 10.0, z, (0.55 + random.nextDouble() * 0.3) * 1000.0});
+        }
+        if (f > 0.55f && random.nextFloat() < f * 0.6f) {
+            double ax = mc.player.getX() + (random.nextDouble() - 0.5) * 8.0;
+            double ay = mc.player.getY() + random.nextDouble() * 3.0;
+            double az = mc.player.getZ() + (random.nextDouble() - 0.5) * 8.0;
+            mc.level.addParticle(ParticleTypes.ELECTRIC_SPARK, ax, ay, az,
+                    (random.nextDouble() - 0.5) * 0.2, (random.nextDouble() - 0.5) * 0.2, (random.nextDouble() - 0.5) * 0.2);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onRenderSkyBolts(RenderLevelStageEvent event) {
+        if (SKY_BOLTS.isEmpty() || !com.cesar.magicandsorcery.client.fx.FxDraw.begin(event)) return;
+        float pt = com.cesar.magicandsorcery.client.fx.FxDraw.partialTick();
+        for (SkyBolt bolt : SKY_BOLTS) {
+            float t = bolt.age + pt;
+            float life = Math.max(0.0f, 1.0f - t / 7.0f);
+            float flicker = (t < 1.0f || (t > 2.0f && t < 3.0f)) ? 1.0f : 0.45f;
+            float a = life * flicker;
+            java.util.List<Vec3> path = com.cesar.magicandsorcery.client.fx.BoltFx.jagged(bolt.top, bolt.bottom, 9.0, new Random(bolt.seed));
+            for (int i = 0; i + 1 < path.size(); i++) {
+                com.cesar.magicandsorcery.client.fx.FxDraw.beam(path.get(i), path.get(i + 1), 4.0, 0.55f, 0.65f, 1.0f, 0.18f * a);
+                com.cesar.magicandsorcery.client.fx.FxDraw.beam(path.get(i), path.get(i + 1), 0.9, 0.9f, 0.95f, 1.0f, 0.9f * a);
+            }
+        }
+        com.cesar.magicandsorcery.client.fx.FxDraw.end();
     }
 
     private static void tickStormEffects(Minecraft mc, ActiveStorm storm) {

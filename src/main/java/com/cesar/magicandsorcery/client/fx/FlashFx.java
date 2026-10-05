@@ -59,21 +59,22 @@ public final class FlashFx {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
         BLINKS.add(new Blink(from, to, height));
+        GroundMarks.rune(from, (seed & 0xFF) / 40.0);
+        GroundMarks.rune(to, ((seed >> 8) & 0xFF) / 40.0);
         RandomSource random = mc.level.random;
         Vec3 dir = to.subtract(from);
         Vec3 flatDir = dir.lengthSqr() < 1.0E-4 ? Vec3.ZERO : dir.normalize();
 
-        // The departing body dissolves into motes drifting along the jump
-        for (int i = 0; i < 40; i++) {
+        // The departure point implodes: motes on the ground swirl into where the caster stood
+        for (int i = 0; i < 28; i++) {
             double a = random.nextDouble() * Math.PI * 2.0;
-            double r = random.nextDouble() * 0.35;
+            double r = 1.2 + random.nextDouble() * 1.0;
             float[] col = random.nextBoolean() ? VIOLET : PINK;
             FxParticles.spawn(FxParticles.Kind.GLOW)
-                    .at(from.x + Math.cos(a) * r, from.y + random.nextDouble() * height, from.z + Math.sin(a) * r)
-                    .vel(flatDir.x * 0.12 + (random.nextDouble() - 0.5) * 0.06, 0.03 + random.nextDouble() * 0.04,
-                            flatDir.z * 0.12 + (random.nextDouble() - 0.5) * 0.06)
-                    .color(col[0], col[1], col[2]).size(0.1f + random.nextFloat() * 0.1f)
-                    .life(16 + random.nextInt(14)).physics(0.0, 0.9, 0.0).noCollide();
+                    .at(from.x + Math.cos(a) * r, from.y + 0.1, from.z + Math.sin(a) * r)
+                    .vel(-Math.cos(a) * r * 0.12 - Math.sin(a) * 0.05, 0.0, -Math.sin(a) * r * 0.12 + Math.cos(a) * 0.05)
+                    .color(col[0], col[1], col[2]).size(0.1f + random.nextFloat() * 0.08f)
+                    .life(8 + random.nextInt(4)).physics(0.0, 0.85, 0.0).noCollide();
         }
         // Motes left along the path
         Vec3 a = from.add(0, height * 0.55, 0);
@@ -84,19 +85,14 @@ public final class FlashFx {
                     .vel((random.nextDouble() - 0.5) * 0.04, (random.nextDouble() - 0.5) * 0.04, (random.nextDouble() - 0.5) * 0.04)
                     .color(PINK[0], PINK[1], PINK[2]).size(0.08f).life(10 + random.nextInt(12)).physics(0, 0.92, 0).noCollide();
         }
-        // Arrival: sparks with physics and a spiral of rising light
+        // Arrival: sparks with physics and a ring of light racing outward along the ground
         FxParticles.sparkBurst(to.x, to.y + height * 0.5, to.z, 28, 0.45, SPARK_COLOR, random);
-        for (int i = 0; i < 20; i++) {
-            double ang = i * Math.PI * 2.0 / 20.0;
-            FxParticles.spawn(FxParticles.Kind.GLOW).at(to.x + Math.cos(ang) * 0.6, to.y + 0.1, to.z + Math.sin(ang) * 0.6)
-                    .vel(-Math.sin(ang) * 0.08, 0.12 + random.nextDouble() * 0.06, Math.cos(ang) * 0.08)
-                    .color(VIOLET[0], VIOLET[1], VIOLET[2]).size(0.12f).life(18 + random.nextInt(10)).physics(0, 0.94, 0).noCollide();
+        for (int i = 0; i < 24; i++) {
+            double ang = i * Math.PI * 2.0 / 24.0;
+            FxParticles.spawn(FxParticles.Kind.GLOW).at(to.x + Math.cos(ang) * 0.5, to.y + 0.1, to.z + Math.sin(ang) * 0.5)
+                    .vel(Math.cos(ang) * 0.22, 0.0, Math.sin(ang) * 0.22)
+                    .color(VIOLET[0], VIOLET[1], VIOLET[2]).size(0.12f).life(12 + random.nextInt(6)).physics(0, 0.88, 0).noCollide();
         }
-        for (int i = 0; i < 12; i++) {
-            mc.level.addParticle(ParticleTypes.REVERSE_PORTAL, to.x + (random.nextDouble() - 0.5),
-                    to.y + random.nextDouble() * height, to.z + (random.nextDouble() - 0.5), 0, 0.05, 0);
-        }
-
         if (mc.player != null && mc.player.getId() == casterId) {
             localKickAge = 0;
         }
@@ -194,11 +190,7 @@ public final class FlashFx {
         float h = mc.player.getBbHeight();
         runeCircle(d, t * 0.08f, alpha);
         float breathe = 0.6f + 0.4f * (float) Math.sin(t * 0.3);
-        FxDraw.beam(d.x, d.y, d.z, d.x, d.y + h, d.z, 0.7, VIOLET[0], VIOLET[1], VIOLET[2], 0.3f * alpha * breathe, 0.1f * alpha);
-        FxDraw.glow(d.x, d.y + h * 0.86, d.z, 0.32, PINK[0], PINK[1], PINK[2], 0.35f * alpha * breathe);
-        FxDraw.glow(d.x, d.y + h * 0.5, d.z, 0.5, VIOLET[0], VIOLET[1], VIOLET[2], 0.3f * alpha * breathe);
-        double scan = (t * 0.06 % 1.0) * h;
-        FxDraw.flatRing(d.x, d.y + scan, d.z, 0.5, 0.08, 1.0f, 0.8f, 1.0f, 0.6f * alpha, 24);
+        FxDraw.flatRing(d.x, d.y + 0.05, d.z, 0.55 + 0.1 * breathe, 0.12, 1.0f, 0.8f, 1.0f, 0.7f * alpha, 28);
 
         // Motes flowing from the caster to the destination
         Vec3 from = mc.player.getPosition(FxDraw.partialTick()).add(0, h * 0.6, 0);
@@ -230,27 +222,6 @@ public final class FlashFx {
         float appear = Mth.clamp(t / 2.0f, 0.0f, 1.0f);
         float h = b.height;
 
-        // 1. Rune circles at both ends
-        runeCircle(b.from, t * 0.06f, life * appear * 0.9f);
-        runeCircle(b.to, -t * 0.06f, life * appear);
-
-        // 2. Ghost afterimage dissolving at the departure point
-        if (t < 16.0f) {
-            float g = 1.0f - t / 16.0f;
-            double rise = t * 0.03;
-            double grow = 1.0 + t * 0.03;
-            Vec3 f = b.from;
-            FxDraw.glow(f.x, f.y + h * 0.86 + rise, f.z, 0.36 * grow, VIOLET[0], VIOLET[1], VIOLET[2], 0.6f * g);
-            FxDraw.glow(f.x, f.y + h * 0.62 + rise, f.z, 0.5 * grow, VIOLET[0], VIOLET[1], VIOLET[2], 0.55f * g);
-            FxDraw.glow(f.x, f.y + h * 0.40 + rise, f.z, 0.45 * grow, PINK[0], PINK[1], PINK[2], 0.45f * g);
-            FxDraw.glow(f.x, f.y + h * 0.18 + rise, f.z, 0.35 * grow, PINK[0], PINK[1], PINK[2], 0.4f * g);
-            FxDraw.beam(f.x, f.y + rise, f.z, f.x, f.y + h + rise, f.z, 0.75, VIOLET[0], VIOLET[1], VIOLET[2], 0.35f * g, 0.35f * g);
-            // Scanning rings sweeping the silhouette
-            for (int k = 0; k < 3; k++) {
-                double scan = ((t * 0.12 + k / 3.0) % 1.0) * h;
-                FxDraw.flatRing(f.x, f.y + scan + rise, f.z, 0.55, 0.12, 1.0f, 0.8f, 1.0f, 0.7f * g, 24);
-            }
-        }
 
         // 3. Implosion ring collapsing into the departure point
         if (t < 7.0f) {
@@ -303,11 +274,6 @@ public final class FlashFx {
             Vec3 tilted = new Vec3(0, 0.7071, 0.7071);
             FxDraw.ring(core, new Vec3(1, 0, 0), tilted, radius * 0.7, 0.2, 1.0f, 0.8f, 1.0f, 0.6f * inv, 36);
             FxDraw.flatRing(b.to.x, b.to.y + 0.05, b.to.z, 0.4 + k * 4.6, 0.45, VIOLET[0], VIOLET[1], VIOLET[2], 0.7f * inv, 48);
-        }
-        if (t < 16.0f) {
-            float p = 1.0f - t / 16.0f;
-            FxDraw.beam(b.to.x, b.to.y, b.to.z, b.to.x, b.to.y + 6.0, b.to.z, 1.0, VIOLET[0], VIOLET[1], VIOLET[2], 0.5f * p, 0.0f);
-            FxDraw.beam(b.to.x, b.to.y, b.to.z, b.to.x, b.to.y + 6.0, b.to.z, 0.22, 1, 1, 1, 0.8f * p, 0.0f);
         }
     }
 

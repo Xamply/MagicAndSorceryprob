@@ -95,6 +95,7 @@ public class ClientDivineSwordRenderer {
     }
 
     public static void triggerSweep(int casterId, float yaw, float pitch, Vec3 pos) {
+        com.cesar.magicandsorcery.client.fx.GroundMarks.holySlash(pos, yaw);
         // Remove channel state upon sweep
         ACTIVE_CHANNELS.remove(casterId);
 

@@ -69,19 +69,25 @@ public class ThundajaSpell extends Spell {
         }
     }
 
-    private static int activeStormCount = 0;
+    /** Players currently channeling Thundaja, with the game time they started (stale entries expire). */
+    private static final Map<java.util.UUID, Long> CHANNELING = new java.util.HashMap<>();
+    private static final long MAX_CHANNEL_TICKS = 300 + 200;
     private static PreviousWeather savedWeather = null;
 
-    public static synchronized void onChannelStart(ServerLevel level) {
-        if (activeStormCount == 0) {
+    public static synchronized void onChannelStart(ServerLevel level, java.util.UUID caster) {
+        long now = level.getGameTime();
+        CHANNELING.values().removeIf(start -> now - start > MAX_CHANNEL_TICKS);
+        if (CHANNELING.isEmpty() && savedWeather == null) {
             savedWeather = new PreviousWeather(level);
         }
-        activeStormCount++;
+        CHANNELING.put(caster, now);
     }
 
-    public static synchronized void onChannelEnd(ServerLevel level) {
-        activeStormCount = Math.max(0, activeStormCount - 1);
-        if (activeStormCount == 0 && savedWeather != null) {
+    public static synchronized void onChannelEnd(ServerLevel level, java.util.UUID caster) {
+        CHANNELING.remove(caster);
+        long now = level.getGameTime();
+        CHANNELING.values().removeIf(start -> now - start > MAX_CHANNEL_TICKS);
+        if (CHANNELING.isEmpty() && savedWeather != null) {
             savedWeather.restore(level);
             savedWeather = null;
         }
@@ -306,7 +312,7 @@ public class ThundajaSpell extends Spell {
         serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, center.x, center.y + 0.2, center.z, 50, 6.0, 0.4, 6.0, 0.05);
 
         // 6. Restore original world weather
-        onChannelEnd(serverLevel);
+        onChannelEnd(serverLevel, player.getUUID());
 
         return true;
     }
