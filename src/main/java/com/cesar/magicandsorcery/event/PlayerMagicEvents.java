@@ -85,10 +85,20 @@ public class PlayerMagicEvents {
     }
 
     @SubscribeEvent
+    public static void onLivingAttack(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            if (com.cesar.magicandsorcery.magic.spell.spells.DenySpell.tryBlockDamage(player, event.getSource(), event.getAmount())) {
+                event.setCanceled(true);
+            }
+        }
+    }
+
+    @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             BlizzardSpell.tickActiveZones();
             com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.tickServer(event.getServer());
+            com.cesar.magicandsorcery.magic.spell.spells.DenySpell.tickServer(event.getServer());
         }
     }
 }

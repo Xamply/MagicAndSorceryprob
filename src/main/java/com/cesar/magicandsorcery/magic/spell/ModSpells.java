@@ -22,6 +22,7 @@ public class ModSpells {
     public static final com.cesar.magicandsorcery.magic.spell.spells.DivineSwordSpell DIVINE_SWORD = register(new com.cesar.magicandsorcery.magic.spell.spells.DivineSwordSpell());
     public static final LaPollaCayendoSpell LA_POLLA_CAYENDO = register(new LaPollaCayendoSpell());
     public static final com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell REDSHA = register(new com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell());
+    public static final com.cesar.magicandsorcery.magic.spell.spells.DenySpell DENY = register(new com.cesar.magicandsorcery.magic.spell.spells.DenySpell());
 
     public static <T extends Spell> T register(T spell) {
         SPELLS.put(spell.getId(), spell);

@@ -26,6 +26,8 @@
   "spell.magic_and_sorcery.la_polla_cayendo.desc": "Invoca una espada celestial que se transforma en una colosal hoja de impacto destructivo.",
   "spell.magic_and_sorcery.redsha": "Redsha",
   "spell.magic_and_sorcery.redsha.desc": "Crea un portal mágico de 2x2 bloques a 2 bloques de distancia. Los hechizos de proyectiles que lo atraviesan generan 2 copias adicionales idénticas.",
+  "spell.magic_and_sorcery.deny": "Deny",
+  "spell.magic_and_sorcery.deny.desc": "Crea una barrera mágica direccional temporal que niega ataques frontales y refleja proyectiles de vuelta a su lanzador como un espejo mágico.",
   "school.magic_and_sorcery.ice": "Hielo",
   "school.magic_and_sorcery.lightning": "Rayo",
   "school.magic_and_sorcery.teleportation": "Teletransporte",

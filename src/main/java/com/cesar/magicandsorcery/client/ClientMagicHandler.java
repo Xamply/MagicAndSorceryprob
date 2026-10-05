@@ -399,8 +399,10 @@ public class ClientMagicHandler {
 
         int castTime = spell.calculateFinalCastTime(method);
         if (castTime <= 0) {
-            // Instant spell is ready immediately!
+            // Instant spell triggers immediately on press!
             ClientMagicData.tickChanneling();
+            ModNetwork.sendToServer(new PacketCastSpell());
+            ClientMagicData.finishChannelingSuccess();
         }
     }
 

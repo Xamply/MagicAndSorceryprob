@@ -34,6 +34,7 @@ public final class SpellVisuals {
         STYLES.put(DivineSwordSpell.ID, new Style(0xFFFFB347, 0xFF5C3608, "†"));
         STYLES.put(LaPollaCayendoSpell.ID, new Style(0xFFFF4D5E, 0xFF5C0A14, "⚔"));
         STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID, new Style(0xFFFF3344, 0xFF5C0810, "❂"));
+        STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.DenySpell.ID, new Style(0xFF5CE1E6, 0xFF0E4347, "⛨"));
     }
 
     private SpellVisuals() {

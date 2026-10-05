@@ -95,20 +95,42 @@ public class BoltSpell extends Spell {
         List<Vec3> chainPoints = new ArrayList<>();
 
         if (target != null) {
-            strike(player, target, finalDamage, lookVec, 1.25, 0.5);
+            // Check if target has an active Deny barrier protecting from this angle
+            if (target instanceof ServerPlayer defendingPlayer && DenySpell.hasActiveBarrier(defendingPlayer)) {
+                DenySpell.ActiveBarrier barrier = DenySpell.getBarrier(defendingPlayer);
+                if (barrier != null && barrier.isThreatInProtectedArc(player.getEyePosition(), defendingPlayer.position())) {
+                    // Bolt is reflected back to the caster!
+                    Vec3 reflectPos = hitPos;
+                    ModNetwork.sendToNearby(new com.cesar.magicandsorcery.network.packets.PacketDenyReflect(
+                            defendingPlayer.getId(), reflectPos), serverLevel, reflectPos, 64.0);
+                    serverLevel.playSound(null, reflectPos.x, reflectPos.y, reflectPos.z,
+                            SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 1.4f, 1.2f);
+                    serverLevel.playSound(null, reflectPos.x, reflectPos.y, reflectPos.z,
+                            SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.6f, 1.8f);
 
-            // 3. Chain lightning: arc to the nearest living enemies around the target
-            Set<LivingEntity> struck = new HashSet<>();
-            struck.add(target);
-            LivingEntity from = target;
-            for (int i = 0; i < MAX_CHAIN; i++) {
-                LivingEntity next = findChainTarget(serverLevel, player, from, struck);
-                if (next == null) break;
-                struck.add(next);
-                Vec3 arcDir = next.position().subtract(from.position());
-                strike(player, next, finalDamage * CHAIN_DAMAGE_FACTOR, arcDir, 0.55, 0.3);
-                chainPoints.add(next.getBoundingBox().getCenter());
-                from = next;
+                    strike(defendingPlayer, player, finalDamage, lookVec.scale(-1.0), 1.25, 0.5);
+                    ModNetwork.sendToNearby(new PacketBoltVisual(reflectPos, player.getEyePosition(), serverLevel.getRandom().nextLong(),
+                            true, Collections.emptyList()), serverLevel, reflectPos.lerp(player.getEyePosition(), 0.5), 80.0);
+                    target = null; // Defending player avoids the hit!
+                }
+            }
+
+            if (target != null) {
+                strike(player, target, finalDamage, lookVec, 1.25, 0.5);
+
+                // 3. Chain lightning: arc to the nearest living enemies around the target
+                Set<LivingEntity> struck = new HashSet<>();
+                struck.add(target);
+                LivingEntity from = target;
+                for (int i = 0; i < MAX_CHAIN; i++) {
+                    LivingEntity next = findChainTarget(serverLevel, player, from, struck);
+                    if (next == null) break;
+                    struck.add(next);
+                    Vec3 arcDir = next.position().subtract(from.position());
+                    strike(player, next, finalDamage * CHAIN_DAMAGE_FACTOR, arcDir, 0.55, 0.3);
+                    chainPoints.add(next.getBoundingBox().getCenter());
+                    from = next;
+                }
             }
         } else if (blockHit.getType() != HitResult.Type.MISS) {
             // Ground strike: small blast of static that shoves anything standing next to it
@@ -218,7 +240,27 @@ public class BoltSpell extends Spell {
 
         if (entityHit != null && entityHit.getEntity() instanceof LivingEntity target) {
             hitPos = entityHit.getLocation();
-            strike(player, target, damage, direction, 1.25, 0.5);
+            if (target instanceof ServerPlayer defendingPlayer && DenySpell.hasActiveBarrier(defendingPlayer)) {
+                DenySpell.ActiveBarrier barrier = DenySpell.getBarrier(defendingPlayer);
+                if (barrier != null && barrier.isThreatInProtectedArc(origin, defendingPlayer.position())) {
+                    // Bolt is reflected back to the caster!
+                    ModNetwork.sendToNearby(new com.cesar.magicandsorcery.network.packets.PacketDenyReflect(
+                            defendingPlayer.getId(), hitPos), serverLevel, hitPos, 64.0);
+                    serverLevel.playSound(null, hitPos.x, hitPos.y, hitPos.z,
+                            SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 1.4f, 1.2f);
+                    serverLevel.playSound(null, hitPos.x, hitPos.y, hitPos.z,
+                            SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.6f, 1.8f);
+
+                    strike(defendingPlayer, player, damage, direction.scale(-1.0), 1.25, 0.5);
+                    ModNetwork.sendToNearby(new PacketBoltVisual(hitPos, player.getEyePosition(), serverLevel.getRandom().nextLong(),
+                            true, Collections.emptyList()), serverLevel, hitPos.lerp(player.getEyePosition(), 0.5), 80.0);
+                    target = null;
+                }
+            }
+
+            if (target != null) {
+                strike(player, target, damage, direction, 1.25, 0.5);
+            }
         }
 
         // Spark at origin on magic circle
