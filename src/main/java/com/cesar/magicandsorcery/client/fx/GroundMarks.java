@@ -24,58 +24,60 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * Marks that spells leave on the ground, draped over the real terrain: they follow slopes, climb up the faces
- * of steps and skip gaps instead of floating flat. Every spell has its own kind of mark:
- * Bolt (Lichtenberg burn), Thundaja (great electric scar), falling sword (glowing cracks), Blizzard (frost),
- * Flash (rune seal) and Divine Sword (golden crescent).
+ * Marks left on the ground by impacts, draped over the real terrain (they follow slopes and climb the faces of
+ * steps instead of floating flat).
+ * <ul>
+ *   <li>Bolt: a short-lived white-hot burn that cools to red and fades in a few seconds.</li>
+ *   <li>Thundaja / falling sword: blast scars of a huge explosion: an irregular scorched crater, hundreds of
+ *   radial shock streaks, glowing zigzag fractures, embers, ash, and a hot rim that cools down.</li>
+ * </ul>
  */
 @Mod.EventBusSubscriber(modid = MagicAndSorcery.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class GroundMarks {
 
-    public enum Kind {
-        BOLT(1400, 70, new float[]{1.0f, 0.75f, 0.35f}),
-        THUNDAJA(2000, 100, new float[]{0.55f, 0.75f, 1.0f}),
-        CRATER(1800, 240, new float[]{1.0f, 0.45f, 0.12f}),
-        FROST(320, 0, new float[]{0.75f, 0.92f, 1.0f}),
-        RUNE(220, 160, new float[]{0.8f, 0.45f, 1.0f}),
-        HOLY(240, 140, new float[]{1.0f, 0.78f, 0.35f});
+    private enum Kind {
+        BOLT(70),
+        LIGHTNING_BLAST(400),
+        FIRE_BLAST(400);
 
-        /** Total lifetime in ticks. */
         final int life;
-        /** Ticks the mark glows before it is only a burn/stain. */
-        final int glowTicks;
-        final float[] glow;
 
-        Kind(int life, int glowTicks, float[] glow) {
+        Kind(int life) {
             this.life = life;
-            this.glowTicks = glowTicks;
-            this.glow = glow;
         }
     }
 
     private record Line(double x1, double z1, double x2, double z2, float width) {
     }
 
+    /** A glowing ember or a fleck of ash: x, z, size, cool-down ticks. */
+    private record Speck(double x, double z, float size, int heatTicks) {
+    }
+
     private static final class Mark {
         final Kind kind;
-        final double cx;
-        final double cz;
-        final double refY;
-        final List<Line> lines = new ArrayList<>();
-        /** Soft round stains: x, z, radius. */
-        final List<double[]> stains = new ArrayList<>();
+        final double cx, cz, refY;
+        final double radius;
+        /** Scorch outline: radius multiplier per angle step (irregular edge). */
+        double[] rim = new double[0];
+        final List<Line> streaks = new ArrayList<>();
+        final List<Line> cracks = new ArrayList<>();
+        final List<Line> burns = new ArrayList<>();
+        final List<Speck> embers = new ArrayList<>();
+        final List<Speck> ash = new ArrayList<>();
         final Map<Long, Double> heights = new HashMap<>();
         int age;
 
-        Mark(Kind kind, Vec3 center) {
+        Mark(Kind kind, Vec3 center, double radius) {
             this.kind = kind;
             this.cx = center.x;
             this.cz = center.z;
             this.refY = center.y;
+            this.radius = radius;
         }
     }
 
-    private static final int MAX_MARKS = 48;
+    private static final int MAX_MARKS = 24;
     private static final double STEP = 0.1;
     private static final double LIFT = 0.02;
     private static final List<Mark> MARKS = new ArrayList<>();
@@ -87,135 +89,95 @@ public final class GroundMarks {
     // Spell marks
     // ------------------------------------------------------------------
 
-    /** Bolt: a forking Lichtenberg figure burned around the impact. */
+    /** Bolt: a white-hot forked burn that cools from white through orange to red in a few seconds. */
     public static void bolt(Vec3 at, long seed) {
-        Mark m = new Mark(Kind.BOLT, at);
+        Mark m = new Mark(Kind.BOLT, at, 1.6);
         Random r = new Random(seed * 13);
         int roots = 7 + r.nextInt(4);
         for (int k = 0; k < roots; k++) {
-            fractal(m, at.x, at.z, r.nextDouble() * Math.PI * 2.0, 0.9 + r.nextDouble() * 0.6, 0.16f, 0, 4, 0.55f, r);
+            fork(m.burns, at.x, at.z, r.nextDouble() * Math.PI * 2.0, 0.9 + r.nextDouble() * 0.6, 0.16f, 0, r);
         }
-        m.stains.add(new double[]{at.x, at.z, 1.2});
         add(m);
     }
 
-    /** Thundaja: a huge branching scar and a scorched heart. */
+    /** Thundaja: the blast scar of a colossal lightning strike. */
     public static void thundaja(Vec3 at, long seed) {
-        Mark m = new Mark(Kind.THUNDAJA, at);
-        Random r = new Random(seed * 31);
-        int roots = 12 + r.nextInt(5);
-        for (int k = 0; k < roots; k++) {
-            fractal(m, at.x, at.z, k * Math.PI * 2.0 / roots + (r.nextDouble() - 0.5) * 0.4, 1.6 + r.nextDouble() * 0.8, 0.3f, 0, 5, 0.6f, r);
-        }
-        m.stains.add(new double[]{at.x, at.z, 3.2});
-        m.stains.add(new double[]{at.x, at.z, 1.6});
-        add(m);
+        add(blast(Kind.LIGHTNING_BLAST, at, 6.5, new Random(seed * 31)));
     }
 
-    /** Falling sword: glowing radial cracks around the crater. */
+    /** Falling sword: the blast scar around its crater. */
     public static void crater(Vec3 at, long seed) {
-        Mark m = new Mark(Kind.CRATER, at);
-        Random r = new Random(seed * 7);
-        int cracks = 9 + r.nextInt(4);
-        for (int k = 0; k < cracks; k++) {
-            double a = k * Math.PI * 2.0 / cracks + (r.nextDouble() - 0.5) * 0.3;
-            double x = at.x + Math.cos(a) * 3.2, z = at.z + Math.sin(a) * 3.2;
-            for (int seg = 0; seg < 4; seg++) {
-                double len = 0.8 + r.nextDouble() * 0.7;
-                a += (r.nextDouble() - 0.5) * 0.5;
-                double nx = x + Math.cos(a) * len, nz = z + Math.sin(a) * len;
-                m.lines.add(new Line(x, z, nx, nz, 0.35f * (1.0f - seg * 0.2f)));
-                if (r.nextFloat() < 0.4f) {
-                    double b = a + (r.nextBoolean() ? 0.8 : -0.8);
-                    m.lines.add(new Line(nx, nz, nx + Math.cos(b) * len * 0.5, nz + Math.sin(b) * len * 0.5, 0.15f));
-                }
+        add(blast(Kind.FIRE_BLAST, at, 5.5, new Random(seed * 7)));
+    }
+
+    private static Mark blast(Kind kind, Vec3 at, double radius, Random r) {
+        Mark m = new Mark(kind, at, radius);
+
+        // Irregular scorched outline
+        int steps = 64;
+        m.rim = new double[steps];
+        double p1 = r.nextDouble() * 6.28, p2 = r.nextDouble() * 6.28, p3 = r.nextDouble() * 6.28;
+        for (int i = 0; i < steps; i++) {
+            double a = i * Math.PI * 2.0 / steps;
+            m.rim[i] = 0.82 + 0.1 * Math.sin(a * 3 + p1) + 0.06 * Math.sin(a * 7 + p2) + 0.05 * Math.sin(a * 13 + p3)
+                    + (r.nextDouble() - 0.5) * 0.06;
+        }
+
+        // Shock streaks: straight radial rays thrown outward by the blast, some reaching far past the edge
+        int streaks = 90 + r.nextInt(40);
+        for (int i = 0; i < streaks; i++) {
+            double a = r.nextDouble() * Math.PI * 2.0;
+            double from = radius * (0.12 + r.nextDouble() * 0.3);
+            double to = radius * (0.7 + r.nextDouble() * (r.nextFloat() < 0.15f ? 0.9 : 0.45));
+            float width = 0.05f + r.nextFloat() * (r.nextFloat() < 0.2f ? 0.28f : 0.12f);
+            double drift = (r.nextDouble() - 0.5) * 0.04;
+            double mid = (from + to) * 0.5;
+            m.streaks.add(new Line(at.x + Math.cos(a) * from, at.z + Math.sin(a) * from,
+                    at.x + Math.cos(a + drift) * mid, at.z + Math.sin(a + drift) * mid, width));
+            m.streaks.add(new Line(at.x + Math.cos(a + drift) * mid, at.z + Math.sin(a + drift) * mid,
+                    at.x + Math.cos(a + drift * 2) * to, at.z + Math.sin(a + drift * 2) * to, width * 0.55f));
+        }
+
+        // Fractures: zigzag cracks splitting the ground (never branching like roots)
+        int cracks = 7 + r.nextInt(5);
+        for (int i = 0; i < cracks; i++) {
+            double a = i * Math.PI * 2.0 / cracks + (r.nextDouble() - 0.5) * 0.5;
+            double dist = radius * 0.08;
+            double x = at.x + Math.cos(a) * dist, z = at.z + Math.sin(a) * dist;
+            int segments = 7 + r.nextInt(5);
+            double segLen = radius * (0.8 + r.nextDouble() * 0.35) / segments;
+            float width = 0.14f + r.nextFloat() * 0.08f;
+            for (int k = 0; k < segments; k++) {
+                double zig = (k % 2 == 0 ? 1 : -1) * (0.35 + r.nextDouble() * 0.35);
+                double ca = a + zig;
+                double nx = x + Math.cos(ca) * segLen, nz = z + Math.sin(ca) * segLen;
+                m.cracks.add(new Line(x, z, nx, nz, width * (1.0f - 0.6f * k / segments)));
                 x = nx;
                 z = nz;
             }
         }
-        m.stains.add(new double[]{at.x, at.z, 4.5});
-        add(m);
-    }
 
-    /** Blizzard: a patch of frost crystals where the tornado passes. */
-    public static void frost(Vec3 at, long seed) {
-        Mark m = new Mark(Kind.FROST, at);
-        Random r = new Random(seed);
-        int crystals = 5 + r.nextInt(4);
-        for (int k = 0; k < crystals; k++) {
-            double a = r.nextDouble() * Math.PI * 2.0, d = r.nextDouble() * 2.6;
-            double cx = at.x + Math.cos(a) * d, cz = at.z + Math.sin(a) * d;
-            double rot = r.nextDouble() * Math.PI;
-            double size = 0.3 + r.nextDouble() * 0.45;
-            for (int arm = 0; arm < 6; arm++) {
-                double aa = rot + arm * Math.PI / 3.0;
-                double ex = cx + Math.cos(aa) * size, ez = cz + Math.sin(aa) * size;
-                m.lines.add(new Line(cx, cz, ex, ez, 0.05f));
-                double bx = cx + Math.cos(aa) * size * 0.55, bz = cz + Math.sin(aa) * size * 0.55;
-                for (int side = -1; side <= 1; side += 2) {
-                    double ba = aa + side * 0.8;
-                    m.lines.add(new Line(bx, bz, bx + Math.cos(ba) * size * 0.3, bz + Math.sin(ba) * size * 0.3, 0.035f));
-                }
-            }
+        // Embers scattered over the scar and ash thrown beyond it
+        for (int i = 0; i < 70; i++) {
+            double a = r.nextDouble() * Math.PI * 2.0, d = Math.sqrt(r.nextDouble()) * radius * 0.9;
+            m.embers.add(new Speck(at.x + Math.cos(a) * d, at.z + Math.sin(a) * d, 0.04f + r.nextFloat() * 0.1f,
+                    40 + r.nextInt(140)));
         }
-        m.stains.add(new double[]{at.x, at.z, 2.8});
-        add(m);
-    }
-
-    /** Flash: a rune seal burned where the blink started or ended. */
-    public static void rune(Vec3 at, double rotation) {
-        Mark m = new Mark(Kind.RUNE, at);
-        circle(m, at.x, at.z, 1.5, 0.1f, 40);
-        circle(m, at.x, at.z, 1.1, 0.06f, 32);
-        for (int tri = 0; tri < 2; tri++) {
-            for (int i = 0; i < 3; i++) {
-                double a0 = rotation + tri * Math.PI / 3.0 + i * Math.PI * 2.0 / 3.0;
-                double a1 = a0 + Math.PI * 2.0 / 3.0;
-                m.lines.add(new Line(at.x + Math.cos(a0) * 1.1, at.z + Math.sin(a0) * 1.1,
-                        at.x + Math.cos(a1) * 1.1, at.z + Math.sin(a1) * 1.1, 0.05f));
-            }
+        for (int i = 0; i < 110; i++) {
+            double a = r.nextDouble() * Math.PI * 2.0, d = radius * (0.8 + r.nextDouble() * 0.8);
+            m.ash.add(new Speck(at.x + Math.cos(a) * d, at.z + Math.sin(a) * d, 0.04f + r.nextFloat() * 0.12f, 0));
         }
-        add(m);
+        return m;
     }
 
-    /** Divine Sword: a golden crescent slashed across the ground in front of the caster. */
-    public static void holySlash(Vec3 caster, float yaw) {
-        Mark m = new Mark(Kind.HOLY, caster);
-        double yawRad = Math.toRadians(yaw);
-        double fx = -Math.sin(yawRad), fz = Math.cos(yawRad);
-        double base = Math.atan2(fz, fx);
-        for (int band = 0; band < 3; band++) {
-            double radius = 2.6 + band * 0.7;
-            double span = 1.25 - band * 0.15;
-            int segs = 18;
-            for (int i = 0; i < segs; i++) {
-                double a0 = base - span / 2.0 + span * i / segs;
-                double a1 = base - span / 2.0 + span * (i + 1) / segs;
-                float taper = (float) Math.sin(Math.PI * (i + 0.5) / segs);
-                m.lines.add(new Line(caster.x + Math.cos(a0) * radius, caster.z + Math.sin(a0) * radius,
-                        caster.x + Math.cos(a1) * radius, caster.z + Math.sin(a1) * radius, (0.22f - band * 0.05f) * taper + 0.02f));
-            }
-        }
-        add(m);
-    }
-
-    private static void fractal(Mark m, double x, double z, double angle, double length, float width, int depth,
-                                int maxDepth, float forkChance, Random r) {
-        if (depth > maxDepth || length < 0.12) return;
+    private static void fork(List<Line> out, double x, double z, double angle, double length, float width, int depth, Random r) {
+        if (depth > 4 || length < 0.12) return;
         double a = angle + (r.nextDouble() - 0.5) * 0.7;
         double nx = x + Math.cos(a) * length, nz = z + Math.sin(a) * length;
-        m.lines.add(new Line(x, z, nx, nz, width));
-        fractal(m, nx, nz, a, length * 0.78, width * 0.8f, depth + 1, maxDepth, forkChance, r);
-        if (r.nextFloat() < forkChance) {
-            fractal(m, nx, nz, a + (r.nextBoolean() ? 0.7 : -0.7), length * 0.6, width * 0.6f, depth + 1, maxDepth, forkChance, r);
-        }
-    }
-
-    private static void circle(Mark m, double cx, double cz, double radius, float width, int segments) {
-        for (int i = 0; i < segments; i++) {
-            double a0 = i * Math.PI * 2.0 / segments, a1 = (i + 1) * Math.PI * 2.0 / segments;
-            m.lines.add(new Line(cx + Math.cos(a0) * radius, cz + Math.sin(a0) * radius,
-                    cx + Math.cos(a1) * radius, cz + Math.sin(a1) * radius, width));
+        out.add(new Line(x, z, nx, nz, width));
+        fork(out, nx, nz, a, length * 0.78, width * 0.8f, depth + 1, r);
+        if (r.nextFloat() < 0.55f) {
+            fork(out, nx, nz, a + (r.nextBoolean() ? 0.7 : -0.7), length * 0.6, width * 0.6f, depth + 1, r);
         }
     }
 
@@ -230,7 +192,7 @@ public final class GroundMarks {
     // Terrain
     // ------------------------------------------------------------------
 
-    /** Height of the walkable surface at (x, z) near refY, or NaN where there is no ground close by. */
+    /** Height of the walkable surface at (x, z) near the mark, or NaN where there is no ground close by. */
     private static double surface(Mark m, Level level, double x, double z) {
         long key = (((long) Math.round(x * 20.0)) << 32) ^ (Math.round(z * 20.0) & 0xFFFFFFFFL);
         Double cached = m.heights.get(key);
@@ -238,7 +200,7 @@ public final class GroundMarks {
         double result = Double.NaN;
         int bx = Mth.floor(x), bz = Mth.floor(z);
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int by = Mth.floor(m.refY + 2.5); by >= Mth.floor(m.refY - 4.0); by--) {
+        for (int by = Mth.floor(m.refY + 2.5); by >= Mth.floor(m.refY - 5.0); by--) {
             pos.set(bx, by, bz);
             FluidState fluid = level.getFluidState(pos);
             if (!fluid.isEmpty() && level.getFluidState(pos.above()).isEmpty()) {
@@ -284,38 +246,24 @@ public final class GroundMarks {
     @SubscribeEvent
     public static void onRender(RenderLevelStageEvent event) {
         if (MARKS.isEmpty() || !FxDraw.begin(event)) return;
-        Minecraft mc = Minecraft.getInstance();
+        Level level = Minecraft.getInstance().level;
         Vec3 cam = FxDraw.camera();
         float pt = FxDraw.partialTick();
 
-        // Stains and burns (translucent), then the glowing part (additive) on top
+        // Burned ground (translucent), then everything still glowing (additive) on top
         FxDraw.solid();
         for (Mark m : MARKS) {
-            if (tooFar(m, cam)) continue;
-            float t = m.age + pt;
-            float fade = fadeOut(m, t);
-            float[] stain = stainColor(m.kind);
-            float stainAlpha = stain[3] * fade * Mth.clamp(t / 6.0f, 0.0f, 1.0f);
-            for (double[] s : m.stains) {
-                drawStain(m, mc.level, s[0], s[1], s[2], stain[0], stain[1], stain[2], stainAlpha);
-            }
-            float lineAlpha = stain[4] * fade;
-            for (Line l : m.lines) {
-                drawLine(m, mc.level, l, l.width() * 1.6, stain[0], stain[1], stain[2], lineAlpha);
+            if (m.kind != Kind.BOLT && !tooFar(m, cam)) {
+                renderBlastScorch(m, level, m.age + pt);
             }
         }
-
         FxDraw.glow();
         for (Mark m : MARKS) {
             if (tooFar(m, cam)) continue;
-            float t = m.age + pt;
-            float heat = glowAmount(m, t);
-            if (heat <= 0.01f) continue;
-            float[] c = glowColor(m.kind, heat);
-            for (Line l : m.lines) {
-                drawLine(m, mc.level, l, l.width() * 2.6, c[0], c[1], c[2], 0.3f * heat);
-                drawLine(m, mc.level, l, l.width() * 0.8, Math.min(1.0f, c[0] + 0.3f * heat), Math.min(1.0f, c[1] + 0.3f * heat),
-                        Math.min(1.0f, c[2] + 0.3f * heat), heat);
+            if (m.kind == Kind.BOLT) {
+                renderBoltBurn(m, level, m.age + pt);
+            } else {
+                renderBlastGlow(m, level, m.age + pt);
             }
         }
         FxDraw.end();
@@ -327,43 +275,81 @@ public final class GroundMarks {
     }
 
     private static float fadeOut(Mark m, float t) {
-        float remaining = m.kind.life - t;
-        return Mth.clamp(remaining / 100.0f, 0.0f, 1.0f);
+        return Mth.clamp((m.kind.life - t) / 100.0f, 0.0f, 1.0f);
     }
 
-    /** How strongly the mark still glows (cooling down after the spell). */
-    private static float glowAmount(Mark m, float t) {
-        Kind k = m.kind;
-        if (k == Kind.FROST) {
-            // Frost glitters faintly all its life
-            return 0.25f * fadeOut(m, t) * Mth.clamp(t / 10.0f, 0.0f, 1.0f);
+    /** Bolt: white-hot at first, cooling through orange to dull red, gone in ~3.5 s. */
+    private static void renderBoltBurn(Mark m, Level level, float t) {
+        float k = Mth.clamp(t / m.kind.life, 0.0f, 1.0f);
+        float heat = 1.0f - k;
+        float r = 1.0f;
+        float g = Mth.clamp(0.25f + 0.75f * heat * heat, 0.0f, 1.0f);
+        float b = Mth.clamp(heat * heat * heat, 0.0f, 1.0f);
+        float alpha = heat * (0.7f + 0.3f * (float) Math.sin(t * 0.8));
+        for (Line l : m.burns) {
+            drawLine(m, level, l, l.width() * 2.5, r, g * 0.7f, b * 0.5f, 0.35f * alpha);
+            drawLine(m, level, l, l.width(), r, g, b, alpha);
         }
-        if (k.glowTicks <= 0) return 0.0f;
-        float g = 1.0f - t / k.glowTicks;
-        g = Mth.clamp(g, 0.0f, 1.0f);
-        float flicker = 0.85f + 0.15f * (float) Math.sin(t * 0.9 + m.refY);
-        return g * g * flicker;
+        drawStain(m, level, m.cx, m.cz, 1.4, null, r, g, b, 0.45f * alpha);
     }
 
-    /** Hot marks go from white through the spell color to a dull ember red as they cool. */
-    private static float[] glowColor(Kind k, float heat) {
-        float[] base = k.glow;
-        if (k == Kind.BOLT || k == Kind.CRATER) {
-            return new float[]{1.0f, Mth.clamp(0.2f + base[1] * heat * 1.3f, 0.0f, 1.0f), Mth.clamp(base[2] * heat * heat, 0.0f, 1.0f)};
+    private static void renderBlastScorch(Mark m, Level level, float t) {
+        float fade = fadeOut(m, t);
+        float appear = Mth.clamp(t / 4.0f, 0.0f, 1.0f);
+        float a = fade * appear;
+        boolean lightning = m.kind == Kind.LIGHTNING_BLAST;
+        float sr = lightning ? 0.05f : 0.08f, sg = 0.05f, sb = lightning ? 0.08f : 0.04f;
+
+        drawStain(m, level, m.cx, m.cz, m.radius, m.rim, sr, sg, sb, 0.78f * a);
+        drawStain(m, level, m.cx, m.cz, m.radius * 0.45, null, sr * 0.6f, sg * 0.6f, sb * 0.6f, 0.6f * a);
+        for (Line l : m.streaks) {
+            drawLine(m, level, l, l.width(), sr, sg, sb, 0.55f * a);
         }
-        return base;
+        for (Line l : m.cracks) {
+            drawLine(m, level, l, l.width() * 1.3, 0.02f, 0.02f, 0.02f, 0.9f * a);
+        }
+        for (Speck s : m.ash) {
+            drawSpeck(m, level, s, 0.06f, 0.055f, 0.05f, 0.6f * a);
+        }
     }
 
-    /** Stain color: r, g, b, stain alpha, line alpha. */
-    private static float[] stainColor(Kind k) {
-        return switch (k) {
-            case BOLT -> new float[]{0.08f, 0.06f, 0.05f, 0.35f, 0.75f};
-            case THUNDAJA -> new float[]{0.06f, 0.06f, 0.09f, 0.5f, 0.8f};
-            case CRATER -> new float[]{0.1f, 0.06f, 0.04f, 0.4f, 0.8f};
-            case FROST -> new float[]{0.85f, 0.94f, 1.0f, 0.35f, 0.75f};
-            case RUNE -> new float[]{0.18f, 0.08f, 0.25f, 0.0f, 0.55f};
-            case HOLY -> new float[]{0.2f, 0.15f, 0.06f, 0.0f, 0.5f};
-        };
+    private static void renderBlastGlow(Mark m, Level level, float t) {
+        boolean lightning = m.kind == Kind.LIGHTNING_BLAST;
+        float fade = fadeOut(m, t);
+
+        // Fractures glow with heat (blue-white for lightning, lava for the sword) and cool down in ~5 s
+        float crackHeat = Mth.clamp(1.0f - t / 100.0f, 0.0f, 1.0f);
+        crackHeat *= crackHeat * (0.85f + 0.15f * (float) Math.sin(t * 0.7 + m.cx));
+        if (crackHeat > 0.01f) {
+            float[] c = lightning ? new float[]{0.55f + 0.4f * crackHeat, 0.75f + 0.25f * crackHeat, 1.0f}
+                    : new float[]{1.0f, 0.3f + 0.6f * crackHeat * crackHeat, 0.08f + 0.5f * crackHeat * crackHeat * crackHeat};
+            for (Line l : m.cracks) {
+                drawLine(m, level, l, l.width() * 3.0, c[0], c[1], c[2], 0.3f * crackHeat);
+                drawLine(m, level, l, l.width() * 0.7, Math.min(1.0f, c[0] + 0.3f), Math.min(1.0f, c[1] + 0.3f),
+                        Math.min(1.0f, c[2] + 0.3f), crackHeat);
+            }
+            // Hot rim of the blast
+            float rimHeat = Mth.clamp(1.0f - t / 60.0f, 0.0f, 1.0f);
+            if (rimHeat > 0.01f) {
+                drawRim(m, level, 0.9, 0.35, c[0], c[1], c[2], 0.5f * rimHeat * rimHeat);
+            }
+        }
+        // The heart of the blast stays hot a little longer
+        float coreHeat = Mth.clamp(1.0f - t / 140.0f, 0.0f, 1.0f);
+        if (coreHeat > 0.01f) {
+            float[] c = lightning ? new float[]{0.6f, 0.75f, 1.0f} : new float[]{1.0f, 0.4f, 0.1f};
+            drawStain(m, level, m.cx, m.cz, m.radius * 0.35, null, c[0], c[1], c[2], 0.35f * coreHeat * coreHeat);
+        }
+        // Embers flicker and die out one by one
+        for (Speck s : m.embers) {
+            float h = Mth.clamp(1.0f - t / s.heatTicks(), 0.0f, 1.0f);
+            if (h <= 0.01f) continue;
+            float flicker = 0.6f + 0.4f * (float) Math.sin(t * 1.3 + s.x() * 7.0 + s.z() * 3.0);
+            float g = lightning ? 0.75f + 0.25f * h : 0.25f + 0.6f * h * h;
+            float b = lightning ? 1.0f : 0.05f + 0.4f * h * h * h;
+            float rr = lightning ? 0.6f + 0.4f * h : 1.0f;
+            drawSpeck(m, level, s, rr, g, b, h * flicker * fade);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -395,7 +381,6 @@ public final class GroundMarks {
                     double mx = (px + x) * 0.5, mz = (pz + z) * 0.5;
                     double low = Math.min(py, y), high = Math.max(py, y);
                     strip(px, py + LIFT, pz, mx, py + LIFT, mz, nx, nz, r, g, b, a);
-                    // The riser sits just off the face, on the lower side (behind when climbing, ahead when dropping)
                     double side = y > py ? -LIFT : LIFT;
                     double fx = mx + dx / len * side, fz = mz + dz / len * side;
                     FxDraw.quad(fx - nx, low + LIFT, fz - nz, fx + nx, low + LIFT, fz + nz,
@@ -417,8 +402,12 @@ public final class GroundMarks {
         FxDraw.vertex(x2 - nx, y2, z2 - nz, r, g, b, a);
     }
 
-    /** A soft round stain made of small cells, each laid on the ground under it. */
-    private static void drawStain(Mark m, Level level, double cx, double cz, double radius, float r, float g, float b, float a) {
+    /**
+     * A soft round stain made of small cells, each laid on the ground under it.
+     * {@code rim}: optional irregular outline (radius multiplier per angle).
+     */
+    private static void drawStain(Mark m, Level level, double cx, double cz, double radius, double[] rim,
+                                  float r, float g, float b, float a) {
         if (a <= 0.003f) return;
         double cell = 0.25;
         int n = (int) Math.ceil(radius / cell);
@@ -426,14 +415,42 @@ public final class GroundMarks {
             for (int j = -n; j < n; j++) {
                 double x0 = cx + i * cell, z0 = cz + j * cell;
                 double mx = x0 + cell * 0.5, mz = z0 + cell * 0.5;
-                double d = Math.sqrt((mx - cx) * (mx - cx) + (mz - cz) * (mz - cz)) / radius;
+                double ddx = mx - cx, ddz = mz - cz;
+                double edge = radius;
+                if (rim != null && rim.length > 0) {
+                    double ang = Math.atan2(ddz, ddx);
+                    double f = (ang < 0 ? ang + Math.PI * 2.0 : ang) / (Math.PI * 2.0) * rim.length;
+                    int i0 = (int) f % rim.length, i1 = (i0 + 1) % rim.length;
+                    double frac = f - Math.floor(f);
+                    edge = radius * (rim[i0] * (1.0 - frac) + rim[i1] * frac);
+                }
+                double d = Math.sqrt(ddx * ddx + ddz * ddz) / edge;
                 if (d >= 1.0) continue;
                 double y = surface(m, level, mx, mz);
                 if (Double.isNaN(y)) continue;
-                float ca = a * (float) (1.0 - d * d);
+                float ca = a * (float) (1.0 - d * d * d);
                 double yy = y + LIFT * 0.75;
                 FxDraw.quad(x0, yy, z0, x0, yy, z0 + cell, x0 + cell, yy, z0 + cell, x0 + cell, yy, z0, r, g, b, ca);
             }
         }
+    }
+
+    /** Glowing ring hugging the blast's irregular outline. */
+    private static void drawRim(Mark m, Level level, double scale, double width, float r, float g, float b, float a) {
+        int n = m.rim.length;
+        for (int i = 0; i < n; i++) {
+            double a0 = i * Math.PI * 2.0 / n, a1 = (i + 1) * Math.PI * 2.0 / n;
+            double r0 = m.radius * m.rim[i] * scale, r1 = m.radius * m.rim[(i + 1) % n] * scale;
+            drawLine(m, level, new Line(m.cx + Math.cos(a0) * r0, m.cz + Math.sin(a0) * r0,
+                    m.cx + Math.cos(a1) * r1, m.cz + Math.sin(a1) * r1, (float) width), width, r, g, b, a);
+        }
+    }
+
+    private static void drawSpeck(Mark m, Level level, Speck s, float r, float g, float b, float a) {
+        if (a <= 0.003f) return;
+        double y = surface(m, level, s.x(), s.z());
+        if (Double.isNaN(y)) return;
+        double h = s.size() * 0.5, yy = y + LIFT * 1.2;
+        FxDraw.quad(s.x() - h, yy, s.z() - h, s.x() - h, yy, s.z() + h, s.x() + h, yy, s.z() + h, s.x() + h, yy, s.z() - h, r, g, b, a);
     }
 }

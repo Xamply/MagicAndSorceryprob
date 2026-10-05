@@ -44,12 +44,38 @@ public final class TornadoFx {
     private record FrostArc(Vec3 a, Vec3 b, long seed, int born) {
     }
 
+    /** Ice spike erupting from the ground around the tornado. */
+    private static final class Spike {
+        final Vec3 base;
+        final Vec3 dir;
+        final Quaternionf rot;
+        final float length;
+        final float thickness;
+        final int delay;
+
+        Spike(Vec3 base, Vec3 dir, float length, float thickness, int delay) {
+            this.base = base;
+            this.dir = dir;
+            this.rot = new Quaternionf().rotationTo(0, 1, 0, (float) dir.x, (float) dir.y, (float) dir.z);
+            this.length = length;
+            this.thickness = thickness;
+            this.delay = delay;
+        }
+    }
+
+    /** Frost lightning dropping from the wall cloud to the ground. */
+    private record FrostStrike(Vec3 top, Vec3 bottom, long seed, int born) {
+    }
+
     private static final class Tornado {
         final Vec3 origin;
         final long seed;
         final int duration;
         final List<Shard> shards = new ArrayList<>();
         final List<FrostArc> arcs = new ArrayList<>();
+        final List<Spike> spikes = new ArrayList<>();
+        final List<FrostStrike> strikes = new ArrayList<>();
+        boolean spikesBuilt;
         int age;
         int cloudFlash = -100;
         double cloudFlashAngle;
@@ -109,11 +135,12 @@ public final class TornadoFx {
             float height = Math.max(0.5f, BlizzardSpell.height(t));
             float strength = BlizzardSpell.intensity(t);
 
-            tickShards(tornado, c, height, strength, t, random);
-            if (tornado.age % 10 == 0 && strength > 0.3f) {
-                GroundMarks.frost(c, random.nextLong());
+            if (!tornado.spikesBuilt) {
+                buildSpikes(mc, tornado, random);
             }
+            tickShards(tornado, c, height, strength, t, random);
             spawnAmbient(mc, c, height, strength, random);
+            tickSpectacle(mc, tornado, c, height, strength, random);
 
             if (tornado.age % 7 == 0 && tornado.shards.size() >= 2 && strength > 0.4f) {
                 Shard a = tornado.shards.get(random.nextInt(tornado.shards.size()));
@@ -132,6 +159,7 @@ public final class TornadoFx {
 
             if (tornado.age >= tornado.duration) {
                 for (Shard shard : tornado.shards) fling(shard, c, random);
+                collapse(mc, tornado, c, random);
                 it.remove();
             }
         }
@@ -203,6 +231,123 @@ public final class TornadoFx {
         p.spinZ = s.sz;
     }
 
+    /** A ring of ice spikes bursts out of the ground around the tornado, slightly tilted outward. */
+    private static void buildSpikes(Minecraft mc, Tornado tornado, RandomSource random) {
+        tornado.spikesBuilt = true;
+        int count = 16 + random.nextInt(7);
+        for (int i = 0; i < count; i++) {
+            double a = i * Math.PI * 2.0 / count + (random.nextDouble() - 0.5) * 0.25;
+            double dist = 4.3 + random.nextDouble() * 1.3;
+            int cluster = 1 + random.nextInt(3);
+            for (int k = 0; k < cluster; k++) {
+                double ca = a + (random.nextDouble() - 0.5) * 0.18;
+                double cd = dist + (random.nextDouble() - 0.5) * 0.7;
+                double x = tornado.origin.x + Math.cos(ca) * cd, z = tornado.origin.z + Math.sin(ca) * cd;
+                Vec3 ground = groundAt(mc, x, tornado.origin.y, z);
+                if (ground == null) continue;
+                Vec3 dir = new Vec3(Math.cos(ca) * (0.3 + random.nextDouble() * 0.35), 1.0, Math.sin(ca) * (0.3 + random.nextDouble() * 0.35))
+                        .add((random.nextDouble() - 0.5) * 0.25, 0, (random.nextDouble() - 0.5) * 0.25).normalize();
+                float length = (k == 0 ? 1.2f : 0.6f) + random.nextFloat() * (k == 0 ? 1.6f : 0.7f);
+                tornado.spikes.add(new Spike(ground.add(dir.scale(-0.15)), dir, length, length * (0.2f + random.nextFloat() * 0.08f),
+                        2 + random.nextInt(16)));
+            }
+        }
+    }
+
+    private static Vec3 groundAt(Minecraft mc, double x, double refY, double z) {
+        net.minecraft.world.phys.BlockHitResult hit = mc.level.clip(new net.minecraft.world.level.ClipContext(
+                new Vec3(x, refY + 3.0, z), new Vec3(x, refY - 6.0, z),
+                net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.ANY, mc.player));
+        return hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK ? hit.getLocation() : null;
+    }
+
+    /** Formation vortex, heavy snowfall, ground debris, frost lightning and the spikes' eruption sounds. */
+    private static void tickSpectacle(Minecraft mc, Tornado tornado, Vec3 c, float height, float strength, RandomSource random) {
+        int age = tornado.age;
+        // Snow converging in a spiral while the tornado forms
+        if (age < BlizzardSpell.FORM_TICKS + 6) {
+            for (int i = 0; i < 10; i++) {
+                double a = random.nextDouble() * Math.PI * 2.0;
+                double r = 5.0 + random.nextDouble() * 2.0;
+                double x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+                FxParticles.spawn(FxParticles.Kind.FLAKE).at(x, c.y + 0.2 + random.nextDouble() * 1.5, z)
+                        .vel(-Math.cos(a) * 0.28 - Math.sin(a) * 0.22, 0.03, -Math.sin(a) * 0.28 + Math.cos(a) * 0.22)
+                        .color(0.88f, 0.96f, 1.0f).size(0.08f + random.nextFloat() * 0.06f).life(18).physics(0, 0.95, 0).noCollide();
+            }
+        }
+        // Spikes cracking out of the ground
+        for (Spike spike : tornado.spikes) {
+            if (age == spike.delay) {
+                mc.level.playLocalSound(spike.base.x, spike.base.y, spike.base.z, net.minecraft.sounds.SoundEvents.AMETHYST_CLUSTER_PLACE,
+                        net.minecraft.sounds.SoundSource.PLAYERS, 0.7f, 0.5f + random.nextFloat() * 0.4f, false);
+                for (int k = 0; k < 4; k++) {
+                    mc.level.addParticle(ParticleTypes.SNOWFLAKE, spike.base.x, spike.base.y + 0.1, spike.base.z,
+                            (random.nextDouble() - 0.5) * 0.2, 0.1, (random.nextDouble() - 0.5) * 0.2);
+                }
+            }
+        }
+        if (strength <= 0.1f) return;
+        // Heavy snowfall over the whole area
+        for (int i = 0; i < 6; i++) {
+            double a = random.nextDouble() * Math.PI * 2.0;
+            double r = random.nextDouble() * 12.0;
+            mc.level.addParticle(ParticleTypes.SNOWFLAKE, c.x + Math.cos(a) * r, c.y + 6.0 + random.nextDouble() * 4.0, c.z + Math.sin(a) * r,
+                    -Math.sin(a) * 0.08, -0.12, Math.cos(a) * 0.08);
+        }
+        // Debris of the ground torn up and whirled around the base
+        net.minecraft.world.level.block.state.BlockState below = mc.level.getBlockState(net.minecraft.core.BlockPos.containing(c.x, c.y - 0.5, c.z));
+        if (!below.isAir() && random.nextFloat() < 0.8f * strength) {
+            net.minecraft.core.particles.BlockParticleOption chunk = new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.BLOCK, below);
+            for (int i = 0; i < 2; i++) {
+                double a = random.nextDouble() * Math.PI * 2.0;
+                double r = 0.8 + random.nextDouble() * 2.2;
+                mc.level.addParticle(chunk, c.x + Math.cos(a) * r, c.y + 0.1, c.z + Math.sin(a) * r,
+                        -Math.sin(a) * 0.35, 0.3 + random.nextDouble() * 0.3, Math.cos(a) * 0.35);
+            }
+        }
+        // Frost lightning from the wall cloud
+        tornado.strikes.removeIf(f -> age - f.born() > 6);
+        if (strength > 0.7f && height > 4.0f && random.nextFloat() < 0.05f) {
+            double ta = random.nextDouble() * Math.PI * 2.0;
+            double topR = BlizzardSpell.funnelRadius(1.0) * (1.0 + random.nextDouble() * 0.8);
+            Vec3 top = new Vec3(c.x + bendX(1.0, age) + Math.cos(ta) * topR, c.y + height, c.z + bendZ(1.0, age) + Math.sin(ta) * topR);
+            double ba = ta + (random.nextDouble() - 0.5) * 1.2;
+            double br = 2.0 + random.nextDouble() * 3.0;
+            Vec3 bottom = groundAt(mc, c.x + Math.cos(ba) * br, c.y, c.z + Math.sin(ba) * br);
+            if (bottom != null) {
+                tornado.strikes.add(new FrostStrike(top, bottom, random.nextLong(), age));
+                FxParticles.sparkBurst(bottom.x, bottom.y + 0.1, bottom.z, 14, 0.3, 0xBFEFFF, random);
+                mc.level.playLocalSound(bottom.x, bottom.y, bottom.z, net.minecraft.sounds.SoundEvents.GLASS_BREAK,
+                        net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 0.6f + random.nextFloat() * 0.3f, false);
+                mc.level.playLocalSound(bottom.x, bottom.y, bottom.z, net.minecraft.sounds.SoundEvents.AMETHYST_BLOCK_CHIME,
+                        net.minecraft.sounds.SoundSource.PLAYERS, 1.2f, 0.7f, false);
+            }
+        }
+    }
+
+    /** The tornado collapses: spikes shatter, a burst of snow and ice blows outward. */
+    private static void collapse(Minecraft mc, Tornado tornado, Vec3 c, RandomSource random) {
+        for (Spike spike : tornado.spikes) {
+            Vec3 mid = spike.base.add(spike.dir.scale(spike.length * 0.5));
+            for (int k = 0; k < 3; k++) {
+                FxParticles.P p = FxParticles.spawn(FxParticles.Kind.SHARD).at(mid.x, mid.y, mid.z)
+                        .vel((random.nextDouble() - 0.5) * 0.35, 0.15 + random.nextDouble() * 0.25, (random.nextDouble() - 0.5) * 0.35)
+                        .color(0.75f, 0.92f, 1.0f).size(spike.thickness * 0.6f).life(40 + random.nextInt(30)).physics(0.04, 0.98, 0.35)
+                        .spin(random, 0.5f);
+            }
+        }
+        for (int i = 0; i < 90; i++) {
+            double a = random.nextDouble() * Math.PI * 2.0;
+            double up = random.nextDouble();
+            FxParticles.spawn(FxParticles.Kind.FLAKE).at(c.x, c.y + 0.5 + up * 3.0, c.z)
+                    .vel(Math.cos(a) * (0.4 + random.nextDouble() * 0.4), 0.05 + up * 0.2, Math.sin(a) * (0.4 + random.nextDouble() * 0.4))
+                    .color(0.9f, 0.97f, 1.0f).size(0.1f + random.nextFloat() * 0.1f).life(20 + random.nextInt(15)).physics(0.0, 0.9, 0.2).noCollide();
+        }
+        FxParticles.sparkBurst(c.x, c.y + 1.0, c.z, 30, 0.6, 0xCFF4FF, random);
+        mc.level.playLocalSound(c.x, c.y + 1.0, c.z, net.minecraft.sounds.SoundEvents.GLASS_BREAK, net.minecraft.sounds.SoundSource.PLAYERS, 2.0f, 0.5f, false);
+        mc.level.playLocalSound(c.x, c.y + 1.0, c.z, net.minecraft.sounds.SoundEvents.POWDER_SNOW_BREAK, net.minecraft.sounds.SoundSource.PLAYERS, 2.0f, 0.6f, false);
+    }
+
     private static void spawnAmbient(Minecraft mc, Vec3 c, float height, float strength, RandomSource random) {
         if (strength <= 0.05f) return;
         for (int i = 0; i < 5; i++) {
@@ -244,6 +389,7 @@ public final class TornadoFx {
             float t = tornado.age + pt;
             renderSmoke(tornado, t);
             float strength = BlizzardSpell.intensity(t);
+            renderSpikes(tornado, t, false);
             for (Shard s : tornado.shards) {
                 s.prevRot.slerp(s.rot, pt, q);
                 FxDraw.crystal(Mth.lerp(pt, s.px, s.x), Mth.lerp(pt, s.py, s.y), Mth.lerp(pt, s.pz, s.z), q,
@@ -336,7 +482,11 @@ public final class TornadoFx {
         renderGroundWind(c, t, strength);
         if (height < 0.2f) return;
 
+        renderSpikes(tornado, t, true);
         renderCore(c, height, strength, t);
+        renderIceHeart(c, height, strength, t);
+        renderGusts(c, strength, t, tornado.seed);
+        renderFrostStrikes(tornado, t);
         renderRibbons(c, height, strength, t, 6, 0.34f, 0.72, 3.4, 0.55, 0.3f, false);
         renderRibbons(c, height, strength, t, 5, 0.21f, 1.02, 2.5, 0.42, 0.22f, true);
         renderWisps(c, height, strength, t);
@@ -356,6 +506,97 @@ public final class TornadoFx {
                 FxDraw.beam(path.get(i), path.get(i + 1), 0.22, 0.55f, 0.75f, 1.0f, 0.35f * life);
                 FxDraw.beam(path.get(i), path.get(i + 1), 0.05, 1.0f, 1.0f, 1.0f, 0.9f * life);
             }
+        }
+    }
+
+    /** Ice spikes: translucent crystal bodies (matter pass) and frosty glowing tips (light pass). */
+    private static void renderSpikes(Tornado tornado, float t, boolean light) {
+        float end = Mth.clamp((tornado.duration - t) / 8.0f, 0.0f, 1.0f);
+        for (Spike spike : tornado.spikes) {
+            float g = Mth.clamp((t - spike.delay) / 5.0f, 0.0f, 1.0f);
+            if (g <= 0.0f || end <= 0.0f) continue;
+            float grow = 1.0f - (1.0f - g) * (1.0f - g) * (1.0f - g);
+            float len = spike.length * grow;
+            Vec3 center = spike.base.add(spike.dir.scale(len * 0.5));
+            Vec3 tip = spike.base.add(spike.dir.scale(len));
+            if (!light) {
+                FxDraw.crystal(center.x, center.y, center.z, spike.rot, len, spike.thickness * grow, 0.55f, 0.8f, 1.0f, 0.82f * end);
+            } else {
+                float shimmer = 0.6f + 0.4f * (float) Math.sin(t * 0.25 + spike.base.x * 3.0);
+                FxDraw.glow(tip.x, tip.y, tip.z, 0.25 + spike.thickness, 0.7f, 0.92f, 1.0f, 0.6f * shimmer * end);
+                FxDraw.glow(center.x, center.y, center.z, len * 0.6, 0.4f, 0.75f, 1.0f, 0.12f * end);
+                if (t - spike.delay < 6.0f) {
+                    // Burst of frost where it broke through
+                    float burst = 1.0f - (t - spike.delay) / 6.0f;
+                    FxDraw.glow(spike.base.x, spike.base.y + 0.1, spike.base.z, 1.0 + spike.length * 0.4, 0.75f, 0.92f, 1.0f, 0.6f * burst);
+                }
+            }
+        }
+    }
+
+    /** A glowing ice heart in the middle of the funnel, wrapped by three tilted rune rings turning on different axes. */
+    private static void renderIceHeart(Vec3 c, float height, float strength, float t) {
+        if (strength <= 0.05f || height < 2.0f) return;
+        double f = 0.45;
+        Vec3 heart = new Vec3(c.x + bendX(f, t), c.y + height * f, c.z + bendZ(f, t));
+        float pulse = 0.5f + 0.5f * (float) Math.sin(t * 0.2);
+        FxDraw.glow(heart.x, heart.y, heart.z, 1.6 + 0.4 * pulse, 0.5f, 0.82f, 1.0f, 0.35f * strength);
+        FxDraw.glow(heart.x, heart.y, heart.z, 0.45 + 0.1 * pulse, 0.95f, 1.0f, 1.0f, 0.9f * strength);
+        for (int k = 0; k < 3; k++) {
+            double spin = t * (0.05 + 0.03 * k) * (k % 2 == 0 ? 1 : -1);
+            double tilt = 0.6 + k * 0.5;
+            Vec3 axisA = new Vec3(Math.cos(spin), 0, Math.sin(spin));
+            Vec3 axisB = new Vec3(-Math.sin(spin) * Math.cos(tilt), Math.sin(tilt), Math.cos(spin) * Math.cos(tilt));
+            double radius = 0.9 + k * 0.32;
+            FxDraw.ring(heart, axisA, axisB, radius, 0.06, 0.7f, 0.92f, 1.0f, 0.75f * strength, 40);
+            // Rune ticks travelling along each ring
+            for (int i = 0; i < 6; i++) {
+                double a = t * 0.1 * (k + 1) + i * Math.PI / 3.0;
+                Vec3 p = heart.add(axisA.scale(Math.cos(a) * radius)).add(axisB.scale(Math.sin(a) * radius));
+                FxDraw.glow(p.x, p.y, p.z, 0.1, 0.9f, 0.98f, 1.0f, 0.9f * strength);
+            }
+        }
+    }
+
+    /** Gusts: wind streaks sweeping around the storm in long arcs. */
+    private static void renderGusts(Vec3 c, float strength, float t, long seed) {
+        if (strength <= 0.05f) return;
+        Random random = new Random(seed * 17);
+        for (int k = 0; k < 22; k++) {
+            double radius = 4.5 + random.nextDouble() * 5.0;
+            double y = c.y + 0.3 + random.nextDouble() * 3.5;
+            double phase = random.nextDouble() * Math.PI * 2.0;
+            double speed = (0.3 + random.nextDouble() * 0.2) * (5.0 / radius);
+            double span = 0.6 + random.nextDouble() * 0.6;
+            double head = phase + t * speed;
+            double prevX = 0, prevZ = 0;
+            for (int i = 0; i <= 8; i++) {
+                double a = head - span * i / 8.0;
+                double x = c.x + Math.cos(a) * radius, z = c.z + Math.sin(a) * radius;
+                if (i > 0) {
+                    float fade = (float) Math.sin(Math.PI * i / 8.0);
+                    FxDraw.beam(prevX, y, prevZ, x, y, z, 0.06, 0.85f, 0.95f, 1.0f, 0.45f * fade * strength, 0.45f * fade * strength);
+                }
+                prevX = x;
+                prevZ = z;
+            }
+        }
+    }
+
+    private static void renderFrostStrikes(Tornado tornado, float t) {
+        for (FrostStrike strike : tornado.strikes) {
+            float age = t - strike.born();
+            float life = 1.0f - age / 6.0f;
+            if (life <= 0) continue;
+            float flicker = (age < 1.0f || (age > 2.0f && age < 3.0f)) ? 1.0f : 0.5f;
+            List<Vec3> path = BoltFx.jagged(strike.top(), strike.bottom(), strike.top().distanceTo(strike.bottom()) * 0.12,
+                    new Random(strike.seed()));
+            for (int i = 0; i + 1 < path.size(); i++) {
+                FxDraw.beam(path.get(i), path.get(i + 1), 0.6, 0.45f, 0.75f, 1.0f, 0.2f * life * flicker);
+                FxDraw.beam(path.get(i), path.get(i + 1), 0.14, 0.9f, 0.97f, 1.0f, life * flicker);
+            }
+            Vec3 b = strike.bottom();
+            FxDraw.glow(b.x, b.y + 0.2, b.z, 1.8 * life, 0.6f, 0.85f, 1.0f, 0.6f * life);
         }
     }
 

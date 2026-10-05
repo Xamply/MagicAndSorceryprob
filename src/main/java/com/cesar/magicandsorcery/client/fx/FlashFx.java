@@ -59,8 +59,6 @@ public final class FlashFx {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
         BLINKS.add(new Blink(from, to, height));
-        GroundMarks.rune(from, (seed & 0xFF) / 40.0);
-        GroundMarks.rune(to, ((seed >> 8) & 0xFF) / 40.0);
         RandomSource random = mc.level.random;
         Vec3 dir = to.subtract(from);
         Vec3 flatDir = dir.lengthSqr() < 1.0E-4 ? Vec3.ZERO : dir.normalize();
