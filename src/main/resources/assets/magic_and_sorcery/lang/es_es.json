@@ -8,12 +8,10 @@
   "item.magic_and_sorcery.mana_potion.restored": "Maná",
   "tooltip.magic_and_sorcery.mana_potion": "Restaura 25 de maná al instante.",
   "block.magic_and_sorcery.sorcery_stone": "Piedra de Hechicería",
-
   "catalyst.magic_and_sorcery.bare_hands": "Manos desnudas",
   "catalyst.magic_and_sorcery.ring": "Anillo mágico",
   "catalyst.magic_and_sorcery.book": "Libro de hechicería",
   "catalyst.magic_and_sorcery.wand": "Vara mágica",
-
   "spell.magic_and_sorcery.bolt": "Bolt",
   "spell.magic_and_sorcery.bolt.desc": "Concentra energía eléctrica y dispara un rayo directo al objetivo.",
   "spell.magic_and_sorcery.blizzard": "Blizzard",
@@ -28,20 +26,17 @@
   "spell.magic_and_sorcery.la_polla_cayendo.desc": "Invoca una espada celestial que se transforma en una colosal hoja de impacto destructivo.",
   "spell.magic_and_sorcery.redsha": "Redsha",
   "spell.magic_and_sorcery.redsha.desc": "Crea un portal mágico de 2x2 bloques a 2 bloques de distancia. Los hechizos de proyectiles que lo atraviesan generan 2 copias adicionales idénticas.",
-
   "school.magic_and_sorcery.ice": "Hielo",
   "school.magic_and_sorcery.lightning": "Rayo",
   "school.magic_and_sorcery.teleportation": "Teletransporte",
   "school.magic_and_sorcery.holy": "Sagrada",
   "school.magic_and_sorcery.physical": "Física",
   "school.magic_and_sorcery.arcane": "Arcano",
-
   "spelltype.magic_and_sorcery.single_target": "Objetivo",
   "spelltype.magic_and_sorcery.area": "Área",
   "spelltype.magic_and_sorcery.mobility": "Movilidad",
   "spelltype.magic_and_sorcery.destruction": "Destrucción",
   "spelltype.magic_and_sorcery.utility": "Utilidad",
-
   "tooltip.magic_and_sorcery.catalyst_type": "Catalizador: %s",
   "tooltip.magic_and_sorcery.wand_desc": "\"Potencia sobre velocidad.\"",
   "tooltip.magic_and_sorcery.book_desc": "\"Equilibrio y versatilidad.\"",
@@ -50,7 +45,6 @@
   "tooltip.magic_and_sorcery.cast_speed_mod": "Velocidad de conjuración",
   "tooltip.magic_and_sorcery.cooldown_mod": "Reducción de cooldown",
   "tooltip.magic_and_sorcery.mana_cost_mod": "Coste de maná",
-
   "message.magic_and_sorcery.not_enough_mana": "¡No tienes suficiente maná!",
   "message.magic_and_sorcery.on_cooldown": "Hechizo en enfriamiento (%s s)",
   "message.magic_and_sorcery.no_spell_selected": "No hay ningún hechizo seleccionado",
@@ -59,13 +53,9 @@
   "hud.magic_and_sorcery.channeling": "Canalizando %s...",
   "hud.magic_and_sorcery.spell_ready": "¡%s Listo!",
   "hud.magic_and_sorcery.release_to_fire": "▶ Suelta la tecla para lanzar",
-
   "key.category.magic_and_sorcery": "Magic and Sorcery",
   "key.magic_and_sorcery.spell_menu": "Menú Radial de Hechizos",
   "key.magic_and_sorcery.cast": "Lanzar Magia",
-  "key.magic_and_sorcery.next_spell": "Hechizo Siguiente",
-  "key.magic_and_sorcery.prev_spell": "Hechizo Anterior",
-
   "gui.magic_and_sorcery.radial_menu": "Selección de Hechizos",
   "gui.magic_and_sorcery.cancel": "Cancelar",
   "gui.magic_and_sorcery.release_to_select": "▶ Suelta la tecla R para seleccionar este hechizo.",
@@ -86,7 +76,6 @@
   "subtitles.magic_and_sorcery.spell.thundaja_impact": "Impacto de Thundaja",
   "subtitles.magic_and_sorcery.spell.sword_explosion": "Impacto de espada destructiva",
   "options.magic_and_sorcery.spell_volume": "Hechizos",
-
   "gui.magic_and_sorcery.config.title": "Configuración de Magic and Sorcery",
   "gui.magic_and_sorcery.config.creative_section": "Opciones de Modo Creativo",
   "gui.magic_and_sorcery.config.infinite_mana.label": "Consumo de Maná (Creativo)",
@@ -98,5 +87,6 @@
   "gui.magic_and_sorcery.config.status.normal": "Activado (Normal)",
   "gui.magic_and_sorcery.config.note_header": "⚠ NOTA DE MODO CREATIVO",
   "gui.magic_and_sorcery.config.note_line1": "Estas opciones solo tienen efecto cuando el jugador está en Modo Creativo.",
-  "gui.magic_and_sorcery.config.note_line2": "En Supervivencia, los hechizos siempre consumen maná y tienen enfriamiento normal."
+  "gui.magic_and_sorcery.config.note_line2": "En Supervivencia, los hechizos siempre consumen maná y tienen enfriamiento normal.",
+  "message.magic_and_sorcery.flash_blocked": "No hay espacio para teletransportarte ahí"
 }

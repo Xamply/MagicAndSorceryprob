@@ -23,20 +23,4 @@ public class KeyBindings {
             GLFW.GLFW_KEY_F,
             KEY_CATEGORY_MAGIC
     );
-
-    public static final KeyMapping KEY_NEXT_SPELL = new KeyMapping(
-            "key.magic_and_sorcery.next_spell",
-            KeyConflictContext.IN_GAME,
-            InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_X,
-            KEY_CATEGORY_MAGIC
-    );
-
-    public static final KeyMapping KEY_PREV_SPELL = new KeyMapping(
-            "key.magic_and_sorcery.prev_spell",
-            KeyConflictContext.IN_GAME,
-            InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_Z,
-            KEY_CATEGORY_MAGIC
-    );
 }

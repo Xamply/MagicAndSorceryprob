@@ -20,9 +20,14 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Blizzard visuals: a wandering arcane frost tornado. A snowflake sigil spins on the ground, layered
- * aurora ribbons twist up the funnel around a column of light, a wall of snow orbits it, ice crystals ride
- * the spiral and are hurled out of the top (bouncing and shattering), and frost arcs jump between them.
+ * Blizzard visuals: a realistic, smoky frost tornado with an arcane heart.
+ * <ul>
+ *   <li>Volumetric smoke: hundreds of soft translucent puffs churning up a rope-like funnel that bends and sways</li>
+ *   <li>A debris skirt of snow dust at the base and a dark rotating wall cloud on top, lit by inner lightning</li>
+ *   <li>Arcane layer: snowflake sigil on the ground, aurora ribbons, a column of light, wisps and glittering snow</li>
+ *   <li>Ice crystals riding the spiral, hurled out of the top with physics, plus frost arcs between them</li>
+ * </ul>
+ * Shape and wander path come from {@link BlizzardSpell}, so they match the server physics.
  */
 @Mod.EventBusSubscriber(modid = MagicAndSorcery.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class TornadoFx {
@@ -46,6 +51,8 @@ public final class TornadoFx {
         final List<Shard> shards = new ArrayList<>();
         final List<FrostArc> arcs = new ArrayList<>();
         int age;
+        int cloudFlash = -100;
+        double cloudFlashAngle;
 
         Tornado(Vec3 origin, long seed, int duration) {
             this.origin = origin;
@@ -65,6 +72,17 @@ public final class TornadoFx {
 
     public static void add(Vec3 origin, int duration, long seed) {
         TORNADOES.add(new Tornado(origin, seed, duration));
+    }
+
+    /**
+     * Rope-like bend of the funnel: the higher, the further the axis sways from the ground contact point.
+     */
+    private static double bendX(double f, float t) {
+        return Math.sin(f * 2.2 + t * 0.045) * 0.6 * f;
+    }
+
+    private static double bendZ(double f, float t) {
+        return Math.cos(f * 1.7 + t * 0.038) * 0.6 * f;
     }
 
     // ------------------------------------------------------------------
@@ -91,7 +109,7 @@ public final class TornadoFx {
             float height = Math.max(0.5f, BlizzardSpell.height(t));
             float strength = BlizzardSpell.intensity(t);
 
-            tickShards(tornado, c, height, strength, random);
+            tickShards(tornado, c, height, strength, t, random);
             spawnAmbient(mc, c, height, strength, random);
 
             if (tornado.age % 7 == 0 && tornado.shards.size() >= 2 && strength > 0.4f) {
@@ -103,6 +121,12 @@ public final class TornadoFx {
             }
             tornado.arcs.removeIf(arc -> tornado.age - arc.born() > 4);
 
+            // Lightning flickering inside the wall cloud
+            if (strength > 0.5f && random.nextFloat() < 0.04f) {
+                tornado.cloudFlash = tornado.age;
+                tornado.cloudFlashAngle = random.nextDouble() * Math.PI * 2.0;
+            }
+
             if (tornado.age >= tornado.duration) {
                 for (Shard shard : tornado.shards) fling(shard, c, random);
                 it.remove();
@@ -110,7 +134,7 @@ public final class TornadoFx {
         }
     }
 
-    private static void tickShards(Tornado tornado, Vec3 c, float height, float strength, RandomSource random) {
+    private static void tickShards(Tornado tornado, Vec3 c, float height, float strength, float t, RandomSource random) {
         if (strength > 0.3f && tornado.age % 2 == 0 && tornado.shards.size() < 36) {
             Shard s = new Shard();
             s.h = random.nextDouble() * 0.6;
@@ -124,7 +148,7 @@ public final class TornadoFx {
             s.sx = (random.nextFloat() - 0.5f) * 0.4f;
             s.sy = (random.nextFloat() - 0.5f) * 0.4f;
             s.sz = (random.nextFloat() - 0.5f) * 0.4f;
-            place(s, c, height);
+            place(s, c, height, t);
             s.px = s.x;
             s.py = s.y;
             s.pz = s.z;
@@ -143,7 +167,7 @@ public final class TornadoFx {
             double frac = s.h / height;
             s.angle += s.spinSpeed * (1.35 - 0.5 * frac);
             s.h += s.rise * Math.max(0.2f, strength);
-            place(s, c, height);
+            place(s, c, height, t);
             if (s.h > height * 0.93 || strength < 0.15f) {
                 fling(s, c, random);
                 it.remove();
@@ -151,11 +175,12 @@ public final class TornadoFx {
         }
     }
 
-    private static void place(Shard s, Vec3 c, float height) {
-        double r = BlizzardSpell.funnelRadius(s.h / height) * s.radial;
-        s.x = c.x + Math.cos(s.angle) * r;
+    private static void place(Shard s, Vec3 c, float height, float t) {
+        double f = s.h / height;
+        double r = BlizzardSpell.funnelRadius(f) * s.radial;
+        s.x = c.x + bendX(f, t) + Math.cos(s.angle) * r;
         s.y = c.y + s.h;
-        s.z = c.z + Math.sin(s.angle) * r;
+        s.z = c.z + bendZ(f, t) + Math.sin(s.angle) * r;
     }
 
     /** Hands the crystal to the physics particles: it flies out of the funnel, bounces and shatters. */
@@ -177,8 +202,7 @@ public final class TornadoFx {
 
     private static void spawnAmbient(Minecraft mc, Vec3 c, float height, float strength, RandomSource random) {
         if (strength <= 0.05f) return;
-        // Snow motes riding the spiral
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 5; i++) {
             double h = random.nextDouble() * height;
             double r = BlizzardSpell.funnelRadius(h / height) * (0.8 + random.nextDouble() * 0.5);
             double a = random.nextDouble() * Math.PI * 2.0;
@@ -188,17 +212,16 @@ public final class TornadoFx {
                     .color(0.85f, 0.95f, 1.0f).size(0.07f + random.nextFloat() * 0.06f)
                     .life(16 + random.nextInt(14)).physics(0.0, 0.93, 0.2).noCollide();
         }
-        // Vanilla snowflakes and frost dust kicked up at the base
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             double a = random.nextDouble() * Math.PI * 2.0;
-            double r = 0.5 + random.nextDouble() * 2.8;
+            double r = 0.5 + random.nextDouble() * 3.5;
             mc.level.addParticle(ParticleTypes.SNOWFLAKE, c.x + Math.cos(a) * r, c.y + 0.1 + random.nextDouble() * 1.5, c.z + Math.sin(a) * r,
-                    -Math.sin(a) * 0.25, 0.08, Math.cos(a) * 0.25);
+                    -Math.sin(a) * 0.3, 0.08, Math.cos(a) * 0.3);
         }
-        if (random.nextFloat() < 0.6f) {
+        if (random.nextFloat() < 0.7f) {
             double a = random.nextDouble() * Math.PI * 2.0;
-            mc.level.addParticle(ParticleTypes.POOF, c.x + Math.cos(a) * 0.8, c.y + 0.05, c.z + Math.sin(a) * 0.8,
-                    Math.cos(a) * 0.12, 0.01, Math.sin(a) * 0.12);
+            mc.level.addParticle(ParticleTypes.POOF, c.x + Math.cos(a) * 1.2, c.y + 0.05, c.z + Math.sin(a) * 1.2,
+                    Math.cos(a) * 0.15 - Math.sin(a) * 0.1, 0.02, Math.sin(a) * 0.15 + Math.cos(a) * 0.1);
         }
     }
 
@@ -211,11 +234,13 @@ public final class TornadoFx {
         if (TORNADOES.isEmpty() || !FxDraw.begin(event)) return;
         float pt = FxDraw.partialTick();
 
-        // Ice crystals (matter) first
+        // Matter first: smoke and ice crystals (translucent, depth sorted)
         FxDraw.solid();
         Quaternionf q = new Quaternionf();
         for (Tornado tornado : TORNADOES) {
-            float strength = BlizzardSpell.intensity(tornado.age + pt);
+            float t = tornado.age + pt;
+            renderSmoke(tornado, t);
+            float strength = BlizzardSpell.intensity(t);
             for (Shard s : tornado.shards) {
                 s.prevRot.slerp(s.rot, pt, q);
                 FxDraw.crystal(Mth.lerp(pt, s.px, s.x), Mth.lerp(pt, s.py, s.y), Mth.lerp(pt, s.pz, s.z), q,
@@ -223,12 +248,79 @@ public final class TornadoFx {
             }
         }
 
-        // Light
+        // Then all light on top
         FxDraw.glow();
         for (Tornado tornado : TORNADOES) {
             renderTornado(tornado, tornado.age + pt, pt);
         }
         FxDraw.end();
+    }
+
+    /**
+     * Volumetric smoke: churning funnel puffs, a dust skirt at the base and a wall cloud on top.
+     * Every puff is procedural (seeded), rising and orbiting with time, so no state is needed.
+     */
+    private static void renderSmoke(Tornado tornado, float t) {
+        float height = BlizzardSpell.height(t);
+        float strength = BlizzardSpell.intensity(t);
+        if (strength <= 0.02f) return;
+        Vec3 c = tornado.center(t);
+        Random random = new Random(tornado.seed * 31L);
+
+        // Funnel: dense puffs hugging the spiral, darker and dustier near the ground
+        if (height > 0.3f) {
+            for (int k = 0; k < 220; k++) {
+                double phase = random.nextDouble() * Math.PI * 2.0;
+                double base = random.nextDouble();
+                double rise = 0.006 + random.nextDouble() * 0.01;
+                double spread = 0.55 + random.nextDouble() * 0.6;
+                double sizeJitter = 0.7 + random.nextDouble() * 0.6;
+                float tone = random.nextFloat();
+                double f = (base + t * rise) % 1.0;
+                double r = BlizzardSpell.funnelRadius(f) * spread;
+                double a = phase + t * (0.24 + 0.1 * tone) * (1.35 - 0.5 * f);
+                double x = c.x + bendX(f, t) + Math.cos(a) * r;
+                double y = c.y + f * height;
+                double z = c.z + bendZ(f, t) + Math.sin(a) * r;
+                double size = (0.45 + 0.75 * BlizzardSpell.funnelRadius(f) / 2.9) * sizeJitter;
+                float env = (float) Math.sin(Math.PI * f);
+                float light = 0.62f + 0.3f * (float) f + 0.08f * tone;
+                FxDraw.puff(x, y, z, size, light * 0.9f, light * 0.95f, Math.min(1.0f, light * 1.05f),
+                        0.22f * strength * env, (float) (a * 0.5));
+            }
+        }
+
+        // Debris skirt: snow dust whipped around the base
+        for (int k = 0; k < 70; k++) {
+            double phase = random.nextDouble() * Math.PI * 2.0;
+            double ring = 1.0 + random.nextDouble() * 3.4;
+            double lift = random.nextDouble();
+            double speed = 0.18 + random.nextDouble() * 0.12;
+            double a = phase + t * speed * (2.2 / ring);
+            double cycle = (lift + t * 0.01) % 1.0;
+            double x = c.x + Math.cos(a) * ring * (0.9 + 0.2 * cycle);
+            double y = c.y + 0.2 + cycle * 1.6;
+            double z = c.z + Math.sin(a) * ring * (0.9 + 0.2 * cycle);
+            float env = (float) Math.sin(Math.PI * cycle);
+            FxDraw.puff(x, y, z, 0.5 + 0.5 * cycle, 0.8f, 0.85f, 0.92f, 0.16f * strength * env, (float) a);
+        }
+
+        // Wall cloud: a broad dark deck slowly rotating above the funnel
+        if (height > 1.0f) {
+            double top = c.y + height;
+            double topX = c.x + bendX(1.0, t), topZ = c.z + bendZ(1.0, t);
+            for (int k = 0; k < 64; k++) {
+                double phase = random.nextDouble() * Math.PI * 2.0;
+                double ring = 1.2 + random.nextDouble() * 4.6;
+                double dy = (random.nextDouble() - 0.3) * 0.9;
+                double a = phase + t * 0.03 * (3.0 / ring);
+                double x = topX + Math.cos(a) * ring;
+                double z = topZ + Math.sin(a) * ring;
+                float shade = 0.42f + 0.18f * (float) random.nextDouble();
+                FxDraw.puff(x, top + dy, z, 1.1 + random.nextDouble() * 0.9, shade, shade * 1.05f, shade * 1.25f,
+                        0.3f * strength, (float) a);
+            }
+        }
     }
 
     private static void renderTornado(Tornado tornado, float t, float pt) {
@@ -242,20 +334,17 @@ public final class TornadoFx {
         if (height < 0.2f) return;
 
         renderCore(c, height, strength, t);
-        // Inner fast ribbons (white-cyan) and outer slower aurora ribbons
-        renderRibbons(c, height, strength, t, 6, 0.34f, 0.78, 3.4, 0.55, 0.5f, false);
-        renderRibbons(c, height, strength, t, 5, 0.21f, 1.06, 2.5, 0.42, 0.38f, true);
+        renderRibbons(c, height, strength, t, 6, 0.34f, 0.72, 3.4, 0.55, 0.3f, false);
+        renderRibbons(c, height, strength, t, 5, 0.21f, 1.02, 2.5, 0.42, 0.22f, true);
         renderWisps(c, height, strength, t);
         renderSnowWall(c, height, strength, t, tornado.seed);
-        renderCloudCap(c, height, strength, t);
+        renderCloudGlow(tornado, c, height, strength, t);
 
-        // Crystal halos
         for (Shard s : tornado.shards) {
             FxDraw.glow(Mth.lerp(pt, s.px, s.x), Mth.lerp(pt, s.py, s.y), Mth.lerp(pt, s.pz, s.z),
                     s.length * 1.4, 0.5f, 0.85f, 1.0f, 0.3f * strength);
         }
 
-        // Frost arcs between crystals
         for (FrostArc arc : tornado.arcs) {
             float life = 1.0f - (tornado.age - arc.born() + pt) / 5.0f;
             if (life <= 0) continue;
@@ -271,28 +360,26 @@ public final class TornadoFx {
     private static void renderSigil(Vec3 c, float t, float alpha) {
         if (alpha <= 0.01f) return;
         double y = c.y + 0.035;
-        FxDraw.flatDisc(c.x, y, c.z, 4.6, 0.3f, 0.65f, 1.0f, 0.22f * alpha, 32);
-        FxDraw.flatRing(c.x, y, c.z, 3.9, 0.22, 0.55f, 0.88f, 1.0f, 0.9f * alpha, 64);
-        FxDraw.flatRing(c.x, y, c.z, 3.45, 0.09, 0.75f, 0.95f, 1.0f, 0.7f * alpha, 64);
-        FxDraw.flatRing(c.x, y, c.z, 1.2, 0.1, 0.75f, 0.95f, 1.0f, 0.8f * alpha, 40);
+        FxDraw.flatDisc(c.x, y, c.z, 4.6, 0.3f, 0.65f, 1.0f, 0.2f * alpha, 32);
+        FxDraw.flatRing(c.x, y, c.z, 3.9, 0.22, 0.55f, 0.88f, 1.0f, 0.85f * alpha, 64);
+        FxDraw.flatRing(c.x, y, c.z, 3.45, 0.09, 0.75f, 0.95f, 1.0f, 0.65f * alpha, 64);
+        FxDraw.flatRing(c.x, y, c.z, 1.2, 0.1, 0.75f, 0.95f, 1.0f, 0.75f * alpha, 40);
 
-        // Six-armed snowflake
         double rot = t * 0.02;
         for (int arm = 0; arm < 6; arm++) {
             double a = rot + arm * Math.PI / 3.0;
             double ca = Math.cos(a), sa = Math.sin(a);
-            FxDraw.groundLine(c.x + ca * 1.2, c.z + sa * 1.2, c.x + ca * 3.45, c.z + sa * 3.45, y, 0.1, 0.7f, 0.92f, 1.0f, 0.85f * alpha);
+            FxDraw.groundLine(c.x + ca * 1.2, c.z + sa * 1.2, c.x + ca * 3.45, c.z + sa * 3.45, y, 0.1, 0.7f, 0.92f, 1.0f, 0.8f * alpha);
             for (double at : new double[]{0.45, 0.68}) {
                 double bx = c.x + ca * (1.2 + 2.25 * at), bz = c.z + sa * (1.2 + 2.25 * at);
                 double len = at < 0.5 ? 0.6 : 0.42;
                 for (int side = -1; side <= 1; side += 2) {
                     double ba = a + side * 0.85;
-                    FxDraw.groundLine(bx, bz, bx + Math.cos(ba) * len, bz + Math.sin(ba) * len, y, 0.08, 0.7f, 0.92f, 1.0f, 0.75f * alpha);
+                    FxDraw.groundLine(bx, bz, bx + Math.cos(ba) * len, bz + Math.sin(ba) * len, y, 0.08, 0.7f, 0.92f, 1.0f, 0.7f * alpha);
                 }
             }
         }
 
-        // Rune diamonds between the outer rings, counter-rotating
         double runeRot = -t * 0.015;
         for (int i = 0; i < 12; i++) {
             double a = runeRot + i * Math.PI / 6.0;
@@ -304,49 +391,51 @@ public final class TornadoFx {
                     {rx - ca * s, rz - sa * s}, {rx + sa * s, rz - ca * s}};
             for (int k = 0; k < 4; k++) {
                 double[] p0 = pts[k], p1 = pts[(k + 1) % 4];
-                FxDraw.groundLine(p0[0], p0[1], p1[0], p1[1], y + 0.002, 0.05, 0.85f, 0.97f, 1.0f, 0.9f * alpha);
+                FxDraw.groundLine(p0[0], p0[1], p1[0], p1[1], y + 0.002, 0.05, 0.85f, 0.97f, 1.0f, 0.85f * alpha);
             }
         }
 
-        // Pulses rippling outward
         float pulse = (t % 25.0f) / 25.0f;
-        FxDraw.flatRing(c.x, y + 0.004, c.z, 0.6 + pulse * 4.6, 0.35, 0.6f, 0.9f, 1.0f, 0.55f * (1.0f - pulse) * alpha, 48);
+        FxDraw.flatRing(c.x, y + 0.004, c.z, 0.6 + pulse * 4.6, 0.35, 0.6f, 0.9f, 1.0f, 0.5f * (1.0f - pulse) * alpha, 48);
     }
 
     /** Spiral gusts sweeping across the ground at the base. */
     private static void renderGroundWind(Vec3 c, float t, float strength) {
         if (strength <= 0.02f) return;
         double y = c.y + 0.05;
-        for (int arm = 0; arm < 3; arm++) {
-            double base = t * 0.3 + arm * Math.PI * 2.0 / 3.0;
+        for (int arm = 0; arm < 4; arm++) {
+            double base = t * 0.3 + arm * Math.PI / 2.0;
             double prevX = c.x, prevZ = c.z;
-            for (int i = 1; i <= 14; i++) {
-                double f = i / 14.0;
-                double r = 0.3 + f * 3.0;
+            for (int i = 1; i <= 16; i++) {
+                double f = i / 16.0;
+                double r = 0.3 + f * 3.6;
                 double a = base + f * 2.6;
                 double x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
-                FxDraw.groundLine(prevX, prevZ, x, z, y, 0.22 * (1 - f) + 0.05, 0.8f, 0.95f, 1.0f, 0.45f * (1.0f - (float) f) * strength);
+                FxDraw.groundLine(prevX, prevZ, x, z, y, 0.22 * (1 - f) + 0.05, 0.8f, 0.95f, 1.0f, 0.4f * (1.0f - (float) f) * strength);
                 prevX = x;
                 prevZ = z;
             }
         }
     }
 
-    /** Column of light at the heart of the funnel. */
+    /** Column of light at the heart of the funnel, following its bend. */
     private static void renderCore(Vec3 c, float height, float strength, float t) {
         float flicker = 0.85f + 0.15f * (float) Math.sin(t * 0.7);
-        FxDraw.beam(c.x, c.y, c.z, c.x, c.y + height, c.z, 0.9, 0.55f, 0.85f, 1.0f, 0.35f * strength * flicker, 0.15f * strength);
-        FxDraw.beam(c.x, c.y, c.z, c.x, c.y + height, c.z, 0.22, 1.0f, 1.0f, 1.0f, 0.8f * strength * flicker, 0.3f * strength);
-        for (int k = 0; k <= 8; k++) {
+        double prevX = c.x, prevY = c.y, prevZ = c.z;
+        for (int k = 1; k <= 8; k++) {
             double f = k / 8.0;
-            FxDraw.glow(c.x, c.y + height * f, c.z, BlizzardSpell.funnelRadius(f) * 0.9, 0.55f, 0.82f, 1.0f, 0.1f * strength);
+            double x = c.x + bendX(f, t), y = c.y + height * f, z = c.z + bendZ(f, t);
+            FxDraw.beam(prevX, prevY, prevZ, x, y, z, 0.9, 0.55f, 0.85f, 1.0f, 0.3f * strength * flicker, 0.3f * strength * flicker);
+            FxDraw.beam(prevX, prevY, prevZ, x, y, z, 0.2, 1.0f, 1.0f, 1.0f, 0.65f * strength * flicker, 0.65f * strength * flicker);
+            FxDraw.glow(x, y, z, BlizzardSpell.funnelRadius(f) * 0.8, 0.55f, 0.82f, 1.0f, 0.08f * strength);
+            prevX = x;
+            prevY = y;
+            prevZ = z;
         }
-        FxDraw.glow(c.x, c.y + 0.3, c.z, 1.8, 0.7f, 0.92f, 1.0f, 0.5f * strength);
+        FxDraw.glow(c.x, c.y + 0.3, c.z, 1.8, 0.7f, 0.92f, 1.0f, 0.45f * strength);
     }
 
-    /**
-     * Twisting translucent bands along the funnel surface with soft edges.
-     */
+    /** Twisting translucent bands along the funnel surface with soft edges. */
     private static void renderRibbons(Vec3 c, float height, float strength, float t, int count, float speed,
                                       double radiusScale, double twist, double angularWidth, float alpha, boolean aurora) {
         int steps = 28;
@@ -355,11 +444,12 @@ public final class TornadoFx {
             for (int i = 0; i < steps; i++) {
                 double f0 = (double) i / steps, f1 = (double) (i + 1) / steps;
                 double y0 = c.y + f0 * height, y1 = c.y + f1 * height;
+                Vec3 c0 = new Vec3(c.x + bendX(f0, t), 0, c.z + bendZ(f0, t));
+                Vec3 c1 = new Vec3(c.x + bendX(f1, t), 0, c.z + bendZ(f1, t));
                 double r0 = BlizzardSpell.funnelRadius(f0) * radiusScale * (1.0 + 0.07 * Math.sin(f0 * 9.0 + t * 0.3 + band));
                 double r1 = BlizzardSpell.funnelRadius(f1) * radiusScale * (1.0 + 0.07 * Math.sin(f1 * 9.0 + t * 0.3 + band));
                 double a0 = t * speed + offset + f0 * twist;
                 double a1 = t * speed + offset + f1 * twist;
-                // Fade in at the base and out at the top
                 float env0 = (float) Math.sqrt(Math.sin(Math.PI * Math.max(0.03, f0)));
                 float env1 = (float) Math.sqrt(Math.sin(Math.PI * Math.min(0.97, f1)));
                 float[] col0 = ribbonColor(f0, t, band, aurora);
@@ -367,9 +457,8 @@ public final class TornadoFx {
                 float al0 = alpha * strength * env0;
                 float al1 = alpha * strength * env1;
                 double w = angularWidth;
-                // Left half (edge -> middle), right half (middle -> edge)
-                strip(c, y0, y1, r0, r1, a0, a1, a0 + w * 0.5, a1 + w * 0.5, col0, col1, 0, 0, al0, al1);
-                strip(c, y0, y1, r0, r1, a0 + w * 0.5, a1 + w * 0.5, a0 + w, a1 + w, col0, col1, al0, al1, 0, 0);
+                strip(c0, c1, y0, y1, r0, r1, a0, a1, a0 + w * 0.5, a1 + w * 0.5, col0, col1, 0, 0, al0, al1);
+                strip(c0, c1, y0, y1, r0, r1, a0 + w * 0.5, a1 + w * 0.5, a0 + w, a1 + w, col0, col1, al0, al1, 0, 0);
             }
         }
     }
@@ -379,18 +468,17 @@ public final class TornadoFx {
             float k = (float) f;
             return new float[]{0.55f + 0.4f * k, 0.85f + 0.13f * k, 1.0f};
         }
-        // Shimmering aurora: teal <-> violet
         float shift = 0.5f + 0.5f * (float) Math.sin(t * 0.05 + f * 3.0 + band * 1.3);
         return new float[]{0.3f + 0.5f * shift, 0.9f - 0.35f * shift, 1.0f};
     }
 
-    private static void strip(Vec3 c, double y0, double y1, double r0, double r1,
+    private static void strip(Vec3 c0, Vec3 c1, double y0, double y1, double r0, double r1,
                               double aStart0, double aStart1, double aEnd0, double aEnd1,
                               float[] col0, float[] col1, float s0, float s1, float e0, float e1) {
-        FxDraw.vertex(c.x + Math.cos(aStart0) * r0, y0, c.z + Math.sin(aStart0) * r0, col0[0], col0[1], col0[2], s0);
-        FxDraw.vertex(c.x + Math.cos(aEnd0) * r0, y0, c.z + Math.sin(aEnd0) * r0, col0[0], col0[1], col0[2], e0);
-        FxDraw.vertex(c.x + Math.cos(aEnd1) * r1, y1, c.z + Math.sin(aEnd1) * r1, col1[0], col1[1], col1[2], e1);
-        FxDraw.vertex(c.x + Math.cos(aStart1) * r1, y1, c.z + Math.sin(aStart1) * r1, col1[0], col1[1], col1[2], s1);
+        FxDraw.vertex(c0.x + Math.cos(aStart0) * r0, y0, c0.z + Math.sin(aStart0) * r0, col0[0], col0[1], col0[2], s0);
+        FxDraw.vertex(c0.x + Math.cos(aEnd0) * r0, y0, c0.z + Math.sin(aEnd0) * r0, col0[0], col0[1], col0[2], e0);
+        FxDraw.vertex(c1.x + Math.cos(aEnd1) * r1, y1, c1.z + Math.sin(aEnd1) * r1, col1[0], col1[1], col1[2], e1);
+        FxDraw.vertex(c1.x + Math.cos(aStart1) * r1, y1, c1.z + Math.sin(aStart1) * r1, col1[0], col1[1], col1[2], s1);
     }
 
     /** Thin bright streaks whipping around outside the funnel. */
@@ -403,10 +491,10 @@ public final class TornadoFx {
                 double f = (double) i / steps;
                 double r = BlizzardSpell.funnelRadius(f) * 1.2;
                 double a = t * 0.45 + offset + f * 2.0;
-                double x = c.x + Math.cos(a) * r, y = c.y + f * height, z = c.z + Math.sin(a) * r;
+                double x = c.x + bendX(f, t) + Math.cos(a) * r, y = c.y + f * height, z = c.z + bendZ(f, t) + Math.sin(a) * r;
                 if (i > 0) {
                     float fade = (float) Math.sin(Math.PI * f);
-                    FxDraw.beam(prevX, prevY, prevZ, x, y, z, 0.09, 0.9f, 0.97f, 1.0f, 0.55f * strength * fade, 0.55f * strength * fade);
+                    FxDraw.beam(prevX, prevY, prevZ, x, y, z, 0.09, 0.9f, 0.97f, 1.0f, 0.45f * strength * fade, 0.45f * strength * fade);
                 }
                 prevX = x;
                 prevY = y;
@@ -415,7 +503,7 @@ public final class TornadoFx {
         }
     }
 
-    /** Dense wall of glittering snow orbiting the funnel (procedural, no particles). */
+    /** Glittering snow orbiting the funnel. */
     private static void renderSnowWall(Vec3 c, float height, float strength, float t, long seed) {
         Random random = new Random(seed);
         for (int k = 0; k < 90; k++) {
@@ -427,20 +515,28 @@ public final class TornadoFx {
             double r = BlizzardSpell.funnelRadius(climb) * spread;
             double a = phase + t * speed * (1.3 - 0.5 * climb);
             float twinkle = 0.5f + 0.5f * (float) Math.sin(t * 0.4 + k);
-            FxDraw.glow(c.x + Math.cos(a) * r, c.y + climb * height, c.z + Math.sin(a) * r,
-                    0.09 + 0.05 * twinkle, 0.9f, 0.97f, 1.0f, 0.85f * strength * twinkle);
+            FxDraw.glow(c.x + bendX(climb, t) + Math.cos(a) * r, c.y + climb * height, c.z + bendZ(climb, t) + Math.sin(a) * r,
+                    0.09 + 0.05 * twinkle, 0.9f, 0.97f, 1.0f, 0.8f * strength * twinkle);
         }
     }
 
-    /** Swirling frost cloud crowning the tornado. */
-    private static void renderCloudCap(Vec3 c, float height, float strength, float t) {
+    /** Frosty light under the wall cloud, and lightning flickering inside it. */
+    private static void renderCloudGlow(Tornado tornado, Vec3 c, float height, float strength, float t) {
         double top = c.y + height;
+        double topX = c.x + bendX(1.0, t), topZ = c.z + bendZ(1.0, t);
         double r = BlizzardSpell.funnelRadius(1.0);
-        FxDraw.flatDisc(c.x, top, c.z, r * 1.7, 0.75f, 0.88f, 1.0f, 0.22f * strength, 28);
         for (int k = 0; k < 3; k++) {
             double wobble = Math.sin(t * 0.08 + k * 2.1) * 0.15;
-            FxDraw.flatRing(c.x, top + wobble + k * 0.12, c.z, r * (1.05 + 0.18 * k), 0.4, 0.8f, 0.93f, 1.0f, 0.35f * strength, 40);
+            FxDraw.flatRing(topX, top - 0.3 + wobble + k * 0.12, topZ, r * (1.05 + 0.18 * k), 0.4, 0.7f, 0.88f, 1.0f, 0.25f * strength, 40);
         }
-        FxDraw.glow(c.x, top, c.z, r * 1.3, 0.65f, 0.85f, 1.0f, 0.22f * strength);
+        float since = tornado.age - tornado.cloudFlash + (t - tornado.age);
+        if (since >= 0 && since < 6) {
+            float f = 1.0f - since / 6.0f;
+            float flicker = (since < 1 || (since > 2 && since < 3)) ? 1.0f : 0.5f;
+            double a = tornado.cloudFlashAngle;
+            double fx = topX + Math.cos(a) * r * 1.4, fz = topZ + Math.sin(a) * r * 1.4;
+            FxDraw.glow(fx, top + 0.2, fz, 3.5, 0.75f, 0.85f, 1.0f, 0.6f * f * flicker * strength);
+            FxDraw.glow(fx, top + 0.2, fz, 1.2, 1.0f, 1.0f, 1.0f, 0.8f * f * flicker * strength);
+        }
     }
 }

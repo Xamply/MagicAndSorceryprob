@@ -16,13 +16,30 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 public class PacketCastSpell {
+    /** Optional aim point computed by the caster's client (e.g. the Flash destination it previewed). */
+    private final net.minecraft.world.phys.Vec3 target;
+
     public PacketCastSpell() {
+        this.target = null;
+    }
+
+    public PacketCastSpell(net.minecraft.world.phys.Vec3 target) {
+        this.target = target;
     }
 
     public PacketCastSpell(FriendlyByteBuf buf) {
+        this.target = buf.readBoolean()
+                ? new net.minecraft.world.phys.Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble())
+                : null;
     }
 
     public void toBytes(FriendlyByteBuf buf) {
+        buf.writeBoolean(target != null);
+        if (target != null) {
+            buf.writeDouble(target.x);
+            buf.writeDouble(target.y);
+            buf.writeDouble(target.z);
+        }
     }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
@@ -67,6 +84,10 @@ public class PacketCastSpell {
                 if (!bypassMana && !magicData.canConsumeMana(finalCost)) {
                     player.sendSystemMessage(Component.translatable("message.magic_and_sorcery.not_enough_mana").withStyle(ChatFormatting.DARK_AQUA), true);
                     return;
+                }
+
+                if (target != null && spell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.ID)) {
+                    com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.setRequestedTarget(player, target);
                 }
 
                 // Execute spell

@@ -9,7 +9,6 @@ import com.cesar.magicandsorcery.magic.catalyst.ICatalyst;
 import com.cesar.magicandsorcery.magic.spell.Spell;
 import com.cesar.magicandsorcery.network.ModNetwork;
 import com.cesar.magicandsorcery.network.packets.PacketCastSpell;
-import com.cesar.magicandsorcery.network.packets.PacketSelectSpell;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.particles.ParticleTypes;
@@ -34,8 +33,6 @@ public class ClientMagicHandler {
         public static void registerKeys(RegisterKeyMappingsEvent event) {
             event.register(KeyBindings.KEY_SPELL_MENU);
             event.register(KeyBindings.KEY_CAST_SPELL);
-            event.register(KeyBindings.KEY_NEXT_SPELL);
-            event.register(KeyBindings.KEY_PREV_SPELL);
         }
 
         @SubscribeEvent
@@ -102,15 +99,6 @@ public class ClientMagicHandler {
                         break;
                     }
                 }
-            }
-
-            // Cycling spells via hotkeys
-            if (KeyBindings.KEY_NEXT_SPELL.consumeClick()) {
-                ModNetwork.sendToServer(new PacketSelectSpell(true));
-            }
-
-            if (KeyBindings.KEY_PREV_SPELL.consumeClick()) {
-                ModNetwork.sendToServer(new PacketSelectSpell(false));
             }
         }
 
@@ -426,6 +414,7 @@ public class ClientMagicHandler {
                 Vec3 finalTarget = com.cesar.magicandsorcery.magic.spell.spells.LaPollaCayendoSpell.findGroundTarget(
                         mc.level, mc.player, chSpell.getRange());
                 com.cesar.magicandsorcery.client.render.ClientFallingSwordRenderer.updateChannel(mc.player.getId(), finalTarget);
+                com.cesar.magicandsorcery.client.render.ClientFallingSwordRenderer.markReleased(mc.player.getId());
                 ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketFallingSwordChannel(
                         com.cesar.magicandsorcery.network.packets.PacketFallingSwordChannel.ACTION_UPDATE,
                         finalTarget
@@ -443,7 +432,14 @@ public class ClientMagicHandler {
             }
 
             // Successfully prepared (100%)! Cast spell upon releasing key!
-            ModNetwork.sendToServer(new PacketCastSpell());
+            // Flash sends the destination the player was shown, so they land exactly where it was marked
+            Vec3 aim = null;
+            if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.ID)
+                    && mc.player != null && mc.level != null) {
+                aim = com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findDestination(mc.level, mc.player,
+                        chSpell.getRange(ClientMagicData.getChannelingMethod()));
+            }
+            ModNetwork.sendToServer(aim != null ? new PacketCastSpell(aim) : new PacketCastSpell());
             ClientMagicData.finishChannelingSuccess();
         } else {
             // Released early (< 100%)! Cancel cast!

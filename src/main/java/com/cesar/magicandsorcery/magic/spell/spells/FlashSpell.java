@@ -5,23 +5,42 @@ import com.cesar.magicandsorcery.magic.catalyst.CastingMethod;
 import com.cesar.magicandsorcery.magic.spell.Spell;
 import com.cesar.magicandsorcery.magic.spell.SpellImpacts;
 import com.cesar.magicandsorcery.magic.spell.SpellSchool;
+import com.cesar.magicandsorcery.magic.spell.SpellTargeting;
 import com.cesar.magicandsorcery.magic.spell.SpellType;
 import com.cesar.magicandsorcery.network.ModNetwork;
 import com.cesar.magicandsorcery.network.packets.PacketFlashVisual;
-import net.minecraft.core.BlockPos;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Flash: blink to where you are looking. The destination is computed by {@link #findDestination}, shared by the
+ * client preview and the server, always lands on a spot where the caster fits, and swaps places with any
+ * creature standing there.
+ */
 public class FlashSpell extends Spell {
     public static final ResourceLocation ID = new ResourceLocation(MagicAndSorcery.MODID, "flash");
+
+    /** Destination the caster's client saw when releasing the spell (validated before use). */
+    private static final Map<UUID, Vec3> REQUESTED_TARGETS = new ConcurrentHashMap<>();
 
     public FlashSpell() {
         super(ID, SpellSchool.TELEPORTATION, SpellType.MOBILITY,
@@ -56,43 +75,134 @@ public class FlashSpell extends Spell {
         return 9.0; // 9 bloques estándar
     }
 
+    public static void setRequestedTarget(Player player, Vec3 target) {
+        REQUESTED_TARGETS.put(player.getUUID(), target);
+    }
+
+    // ------------------------------------------------------------------
+    // Destination search (client preview + server)
+    // ------------------------------------------------------------------
+
+    /**
+     * Where the caster would land: feet position on a spot where their hitbox fits, or null if there is none.
+     */
+    @Nullable
+    public static Vec3 findDestination(Level level, Player player, double range) {
+        Vec3 eye = player.getEyePosition();
+        Vec3 look = player.getViewVector(1.0f);
+        Vec3 end = eye.add(look.scale(range));
+        ClipContext.Fluid fluid = SpellTargeting.aimFluidMode(level, eye);
+        BlockHitResult hit = level.clip(new ClipContext(eye, end, ClipContext.Block.COLLIDER, fluid, player));
+
+        double halfWidth = player.getBbWidth() / 2.0;
+        double height = player.getBbHeight();
+        Vec3 candidate;
+        if (hit.getType() == HitResult.Type.BLOCK) {
+            Direction face = hit.getDirection();
+            Vec3 loc = hit.getLocation();
+            if (face == Direction.UP) {
+                candidate = loc;
+            } else if (face == Direction.DOWN) {
+                // Aiming at a ceiling: hang just below it
+                candidate = loc.subtract(0, height + 0.05, 0);
+            } else {
+                // Aiming at a wall: step out of it and land on the floor in front of it
+                Vec3 out = loc.add(face.getStepX() * (halfWidth + 0.05), 0, face.getStepZ() * (halfWidth + 0.05));
+                candidate = snapDown(level, player, out, 3.5, fluid, out.subtract(0, height * 0.5, 0));
+            }
+        } else {
+            Vec3 feet = end.subtract(0, player.getEyeHeight(), 0);
+            candidate = snapDown(level, player, feet, 2.5, fluid, feet);
+        }
+
+        // Find the nearest spot where the body fits, backing off towards the caster if needed
+        Vec3 flatBack = new Vec3(-look.x, 0, -look.z);
+        flatBack = flatBack.lengthSqr() < 1.0E-4 ? Vec3.ZERO : flatBack.normalize();
+        double maxBack = Math.min(range, candidate.distanceTo(player.position()));
+        for (double back = 0.0; back <= maxBack; back += 0.5) {
+            Vec3 base = candidate.add(flatBack.scale(back));
+            if (back > 0.0) {
+                base = snapDown(level, player, base.add(0, 0.5, 0), 2.0, fluid, base);
+            }
+            for (double up = 0.0; up <= 1.5; up += 0.25) {
+                Vec3 spot = base.add(0, up, 0);
+                if (fits(level, player, spot)) {
+                    return spot;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Vec3 snapDown(Level level, Player player, Vec3 from, double maxDrop, ClipContext.Fluid fluid, Vec3 fallback) {
+        Vec3 ground = SpellTargeting.dropToGround(level, from.add(0, 0.05, 0), player, fluid);
+        if (ground != null && from.y - ground.y <= maxDrop) {
+            return ground;
+        }
+        return fallback;
+    }
+
+    public static boolean fits(Level level, Player player, Vec3 feet) {
+        AABB box = player.getBoundingBox().move(feet.subtract(player.position())).deflate(0.01);
+        return level.noCollision(player, box);
+    }
+
+    /**
+     * Creature standing at the destination, which will swap places with the caster.
+     */
+    @Nullable
+    public static LivingEntity findSwapTarget(Level level, Player player, Vec3 dest) {
+        AABB box = player.getBoundingBox().move(dest.subtract(player.position())).inflate(0.2);
+        LivingEntity best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, box,
+                e -> e != player && e.isAlive() && !e.isSpectator() && !e.isPassenger())) {
+            double d = entity.position().distanceToSqr(dest);
+            if (d < bestDist) {
+                bestDist = d;
+                best = entity;
+            }
+        }
+        return best;
+    }
+
+    // ------------------------------------------------------------------
+    // Cast
+    // ------------------------------------------------------------------
+
     @Override
     public boolean execute(ServerPlayer player, Level level, CastingMethod method) {
         if (!(level instanceof ServerLevel serverLevel)) {
             return false;
         }
+        double range = getRange(method);
 
-        double maxDistance = getRange(method);
-        Vec3 start = player.position().add(0, player.getEyeHeight() * 0.5, 0);
-        Vec3 look = player.getViewVector(1.0f);
-        Vec3 target = start.add(look.scale(maxDistance));
-
-        // Clip against blocks to prevent phasing into walls
-        BlockHitResult hit = level.clip(new ClipContext(start, target, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
-        Vec3 dest;
-        if (hit.getType() != HitResult.Type.MISS) {
-            // Step back slightly from hit point
-            dest = hit.getLocation().subtract(look.scale(0.8));
-        } else {
-            dest = target;
+        Vec3 dest = null;
+        Vec3 requested = REQUESTED_TARGETS.remove(player.getUUID());
+        if (requested != null && isValidRequest(serverLevel, player, requested, range)) {
+            dest = requested;
         }
-
-        // Ensure floor or safe vertical positioning
-        BlockPos destBlock = BlockPos.containing(dest.x, dest.y, dest.z);
-        while (level.getBlockState(destBlock).blocksMotion() && destBlock.getY() < level.getMaxBuildHeight()) {
-            destBlock = destBlock.above();
-            dest = new Vec3(dest.x, destBlock.getY(), dest.z);
+        if (dest == null) {
+            dest = findDestination(serverLevel, player, range);
+        }
+        if (dest == null) {
+            player.displayClientMessage(Component.translatable("message.magic_and_sorcery.flash_blocked")
+                    .withStyle(ChatFormatting.RED), true);
+            return false;
         }
 
         Vec3 origin = player.position();
         float height = player.getBbHeight();
+        LivingEntity swap = findSwapTarget(serverLevel, player, dest);
 
         // Everyone nearby sees the blink (both ends of the jump)
         ModNetwork.sendToNearby(new PacketFlashVisual(player.getId(), origin, dest, height, serverLevel.getRandom().nextLong()),
                 serverLevel, origin.lerp(dest, 0.5), 80.0);
 
         // Departure: the vacuum left behind pulls nearby things in
-        SpellImpacts.shockwave(serverLevel, origin, 3.0, -0.35, 0.12, player);
+        if (swap == null) {
+            SpellImpacts.shockwave(serverLevel, origin, 3.0, -0.35, 0.12, player);
+        }
         serverLevel.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ILLUSIONER_MIRROR_MOVE, SoundSource.PLAYERS, 1.2f, 1.3f);
         serverLevel.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.5f, 1.6f);
 
@@ -100,11 +210,37 @@ public class FlashSpell extends Spell {
         player.teleportTo(dest.x, dest.y, dest.z);
         player.resetFallDistance();
 
-        // Arrival: burst of force shoving everything around outward
-        SpellImpacts.shockwave(serverLevel, dest, 3.5, 0.6, 0.3, player);
+        if (swap != null) {
+            // Swap places: the creature at the destination is thrown back to where the caster stood
+            ModNetwork.sendToNearby(new PacketFlashVisual(swap.getId(), swap.position(), origin, swap.getBbHeight(),
+                    serverLevel.getRandom().nextLong()), serverLevel, origin.lerp(dest, 0.5), 80.0);
+            swap.teleportTo(origin.x, origin.y, origin.z);
+            swap.resetFallDistance();
+            serverLevel.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8f, 0.8f);
+        } else {
+            // Arrival: burst of force shoving everything around outward
+            SpellImpacts.shockwave(serverLevel, dest, 3.5, 0.6, 0.3, player);
+        }
         serverLevel.playSound(null, dest.x, dest.y, dest.z, SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 1.4f, 1.5f);
         serverLevel.playSound(null, dest.x, dest.y, dest.z, SoundEvents.EVOKER_CAST_SPELL, SoundSource.PLAYERS, 0.9f, 1.7f);
-
         return true;
+    }
+
+    /**
+     * Accepts the destination the client saw if it is in range, fits the caster and is visible from their eyes.
+     */
+    private static boolean isValidRequest(ServerLevel level, ServerPlayer player, Vec3 target, double range) {
+        if (!Double.isFinite(target.x) || !Double.isFinite(target.y) || !Double.isFinite(target.z)) return false;
+        if (target.distanceTo(player.getEyePosition()) > range + 2.0) return false;
+        if (!fits(level, player, target)) return false;
+        Vec3 eye = player.getEyePosition();
+        for (double frac : new double[]{0.9, 0.5, 0.1}) {
+            Vec3 point = target.add(0, player.getBbHeight() * frac, 0);
+            BlockHitResult los = level.clip(new ClipContext(eye, point, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+            if (los.getType() == HitResult.Type.MISS || los.getLocation().distanceToSqr(point) < 0.25) {
+                return true;
+            }
+        }
+        return false;
     }
 }

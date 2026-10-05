@@ -46,6 +46,12 @@ public final class FlashFx {
     private static final List<Blink> BLINKS = new ArrayList<>();
     private static int localKickAge = -1;
 
+    // Destination preview while the local player charges Flash (recomputed every tick)
+    private static Vec3 previewDest;
+    private static Vec3 previewMiss;
+    private static int previewSwapId = -1;
+    private static int previewAge;
+
     private FlashFx() {
     }
 
@@ -114,10 +120,31 @@ public final class FlashFx {
         }
         if (mc.isPaused()) return;
         if (localKickAge >= 0 && ++localKickAge > 20) localKickAge = -1;
+        updatePreview(mc);
         Iterator<Blink> it = BLINKS.iterator();
         while (it.hasNext()) {
             if (++it.next().age >= LIFE) it.remove();
         }
+    }
+
+    private static void updatePreview(Minecraft mc) {
+        com.cesar.magicandsorcery.magic.spell.Spell spell = com.cesar.magicandsorcery.client.ClientMagicData.getChannelingSpell();
+        boolean charging = mc.player != null && com.cesar.magicandsorcery.client.ClientMagicData.isChanneling()
+                && spell != null && spell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.ID);
+        if (!charging) {
+            previewDest = null;
+            previewMiss = null;
+            previewSwapId = -1;
+            previewAge = 0;
+            return;
+        }
+        previewAge++;
+        double range = spell.getRange(com.cesar.magicandsorcery.client.ClientMagicData.getChannelingMethod());
+        previewDest = com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findDestination(mc.level, mc.player, range);
+        previewMiss = previewDest == null ? mc.player.getEyePosition().add(mc.player.getViewVector(1.0f).scale(range * 0.6)) : null;
+        net.minecraft.world.entity.LivingEntity swap = previewDest == null ? null
+                : com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findSwapTarget(mc.level, mc.player, previewDest);
+        previewSwapId = swap != null ? swap.getId() : -1;
     }
 
     @SubscribeEvent
@@ -132,12 +159,70 @@ public final class FlashFx {
 
     @SubscribeEvent
     public static void onRender(RenderLevelStageEvent event) {
-        if (BLINKS.isEmpty() || !FxDraw.begin(event)) return;
+        boolean preview = previewDest != null || previewMiss != null;
+        if ((BLINKS.isEmpty() && !preview) || !FxDraw.begin(event)) return;
         float pt = FxDraw.partialTick();
         for (Blink blink : BLINKS) {
             renderBlink(blink, blink.age + pt);
         }
+        if (preview) {
+            renderPreview(previewAge + pt);
+        }
         FxDraw.end();
+    }
+
+    /** Where the blink will land: rune circle, ghost silhouette, guiding motes and the creature that will swap. */
+    private static void renderPreview(float t) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        float progress = com.cesar.magicandsorcery.client.ClientMagicData.isReadyToCast() ? 1.0f
+                : com.cesar.magicandsorcery.client.ClientMagicData.getChannelProgress();
+        float alpha = 0.35f + 0.65f * progress;
+
+        if (previewDest == null) {
+            // Nowhere to land: red X
+            Vec3 m = previewMiss;
+            Vec3[] basis = FxDraw.basis(m.subtract(mc.player.getEyePosition()));
+            Vec3 a = basis[0].add(basis[1]).scale(0.35), b = basis[0].subtract(basis[1]).scale(0.35);
+            FxDraw.beam(m.add(a), m.subtract(a), 0.12, 1.0f, 0.25f, 0.3f, 0.9f);
+            FxDraw.beam(m.add(b), m.subtract(b), 0.12, 1.0f, 0.25f, 0.3f, 0.9f);
+            FxDraw.ring(m, basis[0], basis[1], 0.5, 0.08, 1.0f, 0.25f, 0.3f, 0.7f, 24);
+            return;
+        }
+
+        Vec3 d = previewDest;
+        float h = mc.player.getBbHeight();
+        runeCircle(d, t * 0.08f, alpha);
+        float breathe = 0.6f + 0.4f * (float) Math.sin(t * 0.3);
+        FxDraw.beam(d.x, d.y, d.z, d.x, d.y + h, d.z, 0.7, VIOLET[0], VIOLET[1], VIOLET[2], 0.3f * alpha * breathe, 0.1f * alpha);
+        FxDraw.glow(d.x, d.y + h * 0.86, d.z, 0.32, PINK[0], PINK[1], PINK[2], 0.35f * alpha * breathe);
+        FxDraw.glow(d.x, d.y + h * 0.5, d.z, 0.5, VIOLET[0], VIOLET[1], VIOLET[2], 0.3f * alpha * breathe);
+        double scan = (t * 0.06 % 1.0) * h;
+        FxDraw.flatRing(d.x, d.y + scan, d.z, 0.5, 0.08, 1.0f, 0.8f, 1.0f, 0.6f * alpha, 24);
+
+        // Motes flowing from the caster to the destination
+        Vec3 from = mc.player.getPosition(FxDraw.partialTick()).add(0, h * 0.6, 0);
+        Vec3 to = d.add(0, h * 0.55, 0);
+        double dist = from.distanceTo(to);
+        int motes = Math.max(6, (int) (dist * 2.5));
+        for (int i = 0; i < motes; i++) {
+            double f = ((i + t * 0.15) / motes) % 1.0;
+            Vec3 p = from.lerp(to, f).add(0, Math.sin(f * Math.PI) * Math.min(1.5, dist * 0.15), 0);
+            FxDraw.glow(p.x, p.y, p.z, 0.08, PINK[0], PINK[1], PINK[2], 0.8f * alpha * (float) Math.sin(f * Math.PI));
+        }
+
+        if (previewSwapId >= 0) {
+            net.minecraft.world.entity.Entity swap = mc.level.getEntity(previewSwapId);
+            if (swap != null) {
+                Vec3 c = swap.getPosition(FxDraw.partialTick());
+                double r = swap.getBbWidth() * 0.8 + 0.3;
+                for (int k = 0; k < 2; k++) {
+                    double y = c.y + 0.1 + ((t * 0.05 + k * 0.5) % 1.0) * swap.getBbHeight();
+                    FxDraw.flatRing(c.x, y, c.z, r, 0.1, 0.4f, 1.0f, 0.85f, 0.8f * alpha, 28);
+                }
+                FxDraw.glow(c.x, c.y + swap.getBbHeight() * 0.5, c.z, swap.getBbHeight() * 0.7, 0.4f, 1.0f, 0.85f, 0.2f * alpha);
+            }
+        }
     }
 
     private static void renderBlink(Blink b, float t) {

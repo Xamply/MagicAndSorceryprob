@@ -124,6 +124,34 @@ public final class FxDraw {
     }
 
     /**
+     * Camera-facing soft smoke puff (use with {@link #solid()}): lit from above, shaded below,
+     * dense in the middle and fading to nothing at the edge. {@code spin} rotates the shading irregularity.
+     */
+    public static void puff(double x, double y, double z, double radius, float r, float g, float b, float a, float spin) {
+        if (a <= 0.003f || radius <= 0.0) return;
+        int segments = 12;
+        double step = Math.PI * 2.0 / segments;
+        float lx = camLeft.x(), ly = camLeft.y(), lz = camLeft.z();
+        float ux = camUp.x(), uy = camUp.y(), uz = camUp.z();
+        float cr = r * 0.92f, cg = g * 0.92f, cb = b * 0.95f;
+        for (int i = 0; i < segments; i++) {
+            double a1 = i * step + spin, a2 = (i + 1) * step + spin;
+            // Lumpy outline so puffs do not look like perfect discs
+            double r1 = radius * (0.85 + 0.15 * Math.sin(a1 * 3.0 + spin * 2.0));
+            double r2 = radius * (0.85 + 0.15 * Math.sin(a2 * 3.0 + spin * 2.0));
+            double c1 = Math.cos(a1) * r1, s1 = Math.sin(a1) * r1;
+            double c2 = Math.cos(a2) * r2, s2 = Math.sin(a2) * r2;
+            // Light from above: upper edge brighter, lower edge darker
+            float l1 = 0.78f + 0.22f * (float) Math.sin(a1);
+            float l2 = 0.78f + 0.22f * (float) Math.sin(a2);
+            vertex(x, y, z, cr, cg, cb, a);
+            vertex(x + lx * c1 + ux * s1, y + ly * c1 + uy * s1, z + lz * c1 + uz * s1, r * l1, g * l1, b * l1, 0);
+            vertex(x + lx * c2 + ux * s2, y + ly * c2 + uy * s2, z + lz * c2 + uz * s2, r * l2, g * l2, b * l2, 0);
+            vertex(x, y, z, cr, cg, cb, a);
+        }
+    }
+
+    /**
      * Camera-facing ribbon from A to B with a bright center line and soft edges.
      */
     public static void beam(double ax, double ay, double az, double bx, double by, double bz, double width,

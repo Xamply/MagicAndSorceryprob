@@ -44,6 +44,10 @@ public class ClientFallingSwordRenderer {
         public final int casterId;
         public Vec3 targetPos;
         public int ticksActive;
+        /** Ticks since the caster released the spell, waiting for the server strike (-1 = still channeling). */
+        public int releasedTicks = -1;
+        /** Ticks since the last target update (remote casters send one every 2 ticks while channeling). */
+        public int silentTicks;
 
         public ActiveChannel(int casterId, Vec3 targetPos) {
             this.casterId = casterId;
@@ -85,11 +89,22 @@ public class ClientFallingSwordRenderer {
     }
 
     public static void updateChannel(int casterId, Vec3 targetPos) {
+        // Only move an existing reticle: late update packets must never resurrect a finished channel
+        ActiveChannel ch = ACTIVE_CHANNELS.get(casterId);
+        if (ch != null && ch.releasedTicks < 0) {
+            ch.targetPos = targetPos;
+            ch.silentTicks = 0;
+        }
+    }
+
+    /**
+     * The local caster released the spell: keep the reticle briefly until the strike arrives,
+     * and drop it if the server never confirms (cooldown, mana, rejected cast).
+     */
+    public static void markReleased(int casterId) {
         ActiveChannel ch = ACTIVE_CHANNELS.get(casterId);
         if (ch != null) {
-            ch.targetPos = targetPos;
-        } else {
-            ACTIVE_CHANNELS.put(casterId, new ActiveChannel(casterId, targetPos));
+            ch.releasedTicks = 0;
         }
     }
 
@@ -112,6 +127,12 @@ public class ClientFallingSwordRenderer {
         }
     }
 
+    private static boolean isLocalChanneling() {
+        com.cesar.magicandsorcery.magic.spell.Spell spell = com.cesar.magicandsorcery.client.ClientMagicData.getChannelingSpell();
+        return com.cesar.magicandsorcery.client.ClientMagicData.isChanneling()
+                && spell != null && spell.getId().equals(LaPollaCayendoSpell.ID);
+    }
+
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
@@ -125,9 +146,30 @@ public class ClientFallingSwordRenderer {
         }
 
         // Update active channeling targets in real time
-        for (ActiveChannel channel : ACTIVE_CHANNELS.values()) {
+        java.util.Iterator<ActiveChannel> channels = ACTIVE_CHANNELS.values().iterator();
+        while (channels.hasNext()) {
+            ActiveChannel channel = channels.next();
             channel.ticksActive++;
-            if (mc.player != null && channel.casterId == mc.player.getId()) {
+            boolean isLocal = mc.player != null && channel.casterId == mc.player.getId();
+
+            if (channel.releasedTicks >= 0) {
+                // Released: wait a moment for the strike, then give up
+                if (++channel.releasedTicks > 30) {
+                    channels.remove();
+                }
+                continue;
+            }
+            if (!isLocal && ++channel.silentTicks > 40) {
+                // Remote caster stopped sending updates (cast rejected or connection hiccup)
+                channels.remove();
+                continue;
+            }
+            if (isLocal && !isLocalChanneling()) {
+                // The local cast ended without a strike (cancelled or interrupted)
+                channels.remove();
+                continue;
+            }
+            if (isLocal) {
                 Vec3 newTarget = LaPollaCayendoSpell.findGroundTarget(mc.level, mc.player, 40.0);
                 channel.targetPos = newTarget;
 

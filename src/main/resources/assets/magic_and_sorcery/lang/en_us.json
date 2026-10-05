@@ -8,12 +8,10 @@
   "item.magic_and_sorcery.mana_potion.restored": "Mana",
   "tooltip.magic_and_sorcery.mana_potion": "Restores 25 mana instantly.",
   "block.magic_and_sorcery.sorcery_stone": "Sorcery Stone",
-
   "catalyst.magic_and_sorcery.bare_hands": "Bare Hands",
   "catalyst.magic_and_sorcery.ring": "Magic Ring",
   "catalyst.magic_and_sorcery.book": "Spell Book",
   "catalyst.magic_and_sorcery.wand": "Magic Wand",
-
   "spell.magic_and_sorcery.bolt": "Bolt",
   "spell.magic_and_sorcery.bolt.desc": "Concentrates electrical energy and strikes a target with a lightning ray.",
   "spell.magic_and_sorcery.blizzard": "Blizzard",
@@ -28,20 +26,17 @@
   "spell.magic_and_sorcery.la_polla_cayendo.desc": "Summons a celestial blade that transforms into a colossal sword of catastrophic impact.",
   "spell.magic_and_sorcery.redsha": "Redsha",
   "spell.magic_and_sorcery.redsha.desc": "Creates a 2x2 magic portal 2 blocks away. Projectile spells passing through it generate 2 additional identical copies.",
-
   "school.magic_and_sorcery.ice": "Ice",
   "school.magic_and_sorcery.lightning": "Lightning",
   "school.magic_and_sorcery.teleportation": "Teleportation",
   "school.magic_and_sorcery.holy": "Holy",
   "school.magic_and_sorcery.physical": "Physical",
   "school.magic_and_sorcery.arcane": "Arcane",
-
   "spelltype.magic_and_sorcery.single_target": "Target",
   "spelltype.magic_and_sorcery.area": "Area",
   "spelltype.magic_and_sorcery.mobility": "Mobility",
   "spelltype.magic_and_sorcery.destruction": "Destruction",
   "spelltype.magic_and_sorcery.utility": "Utility",
-
   "tooltip.magic_and_sorcery.catalyst_type": "Catalyst: %s",
   "tooltip.magic_and_sorcery.wand_desc": "\"Power over speed.\"",
   "tooltip.magic_and_sorcery.book_desc": "\"Balance and versatility.\"",
@@ -50,7 +45,6 @@
   "tooltip.magic_and_sorcery.cast_speed_mod": "Cast Speed",
   "tooltip.magic_and_sorcery.cooldown_mod": "Cooldown Reduction",
   "tooltip.magic_and_sorcery.mana_cost_mod": "Mana Cost",
-
   "message.magic_and_sorcery.not_enough_mana": "Not enough mana!",
   "message.magic_and_sorcery.on_cooldown": "Spell on cooldown (%s s)",
   "message.magic_and_sorcery.no_spell_selected": "No spell selected",
@@ -59,13 +53,9 @@
   "hud.magic_and_sorcery.channeling": "Channeling %s...",
   "hud.magic_and_sorcery.spell_ready": "%s Ready!",
   "hud.magic_and_sorcery.release_to_fire": "▶ Release key to cast",
-
   "key.category.magic_and_sorcery": "Magic and Sorcery",
   "key.magic_and_sorcery.spell_menu": "Spell Radial Menu",
   "key.magic_and_sorcery.cast": "Cast Magic",
-  "key.magic_and_sorcery.next_spell": "Next Spell",
-  "key.magic_and_sorcery.prev_spell": "Previous Spell",
-
   "gui.magic_and_sorcery.radial_menu": "Spell Selection",
   "gui.magic_and_sorcery.cancel": "Cancel",
   "gui.magic_and_sorcery.release_to_select": "▶ Release R to select this spell.",
@@ -86,7 +76,6 @@
   "subtitles.magic_and_sorcery.spell.thundaja_impact": "Thundaja strikes",
   "subtitles.magic_and_sorcery.spell.sword_explosion": "Devastating sword impact",
   "options.magic_and_sorcery.spell_volume": "Spells",
-
   "gui.magic_and_sorcery.config.title": "Magic and Sorcery Configuration",
   "gui.magic_and_sorcery.config.creative_section": "Creative Mode Settings",
   "gui.magic_and_sorcery.config.infinite_mana.label": "Mana Consumption (Creative)",
@@ -98,5 +87,6 @@
   "gui.magic_and_sorcery.config.status.normal": "Enabled (Normal)",
   "gui.magic_and_sorcery.config.note_header": "⚠ CREATIVE MODE NOTE",
   "gui.magic_and_sorcery.config.note_line1": "These settings only take effect while playing in Creative Mode.",
-  "gui.magic_and_sorcery.config.note_line2": "In Survival mode, spells always consume mana and have normal cooldowns."
+  "gui.magic_and_sorcery.config.note_line2": "In Survival mode, spells always consume mana and have normal cooldowns.",
+  "message.magic_and_sorcery.flash_blocked": "No room to blink there"
 }

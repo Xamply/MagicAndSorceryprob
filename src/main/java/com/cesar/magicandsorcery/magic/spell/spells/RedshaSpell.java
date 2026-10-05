@@ -9,7 +9,9 @@ import com.cesar.magicandsorcery.network.ModNetwork;
 import com.cesar.magicandsorcery.network.packets.PacketRedshaRemove;
 import com.cesar.magicandsorcery.network.packets.PacketRedshaSpawn;
 import com.cesar.magicandsorcery.network.packets.PacketRedshaTrigger;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -17,11 +19,19 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.world.entity.projectile.AbstractHurtingProjectile;
+import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.ThrownEnderpearl;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,15 +40,29 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Redsha: opens a crimson seal in front of the caster. Every projectile (or Bolt) that crosses it splits into
+ * the original plus two temporary echoes fanning out. Echoes cannot be picked up and dissolve as soon as they hit
+ * something or after a few seconds, so nothing is ever really duplicated.
+ */
 public class RedshaSpell extends Spell {
     public static final ResourceLocation ID = new ResourceLocation(MagicAndSorcery.MODID, "redsha");
 
-    public static final float PORTAL_SIZE = 2.0f; // 2x2 blocks (width 2.0, height 2.0)
-    public static final float PORTAL_RADIUS = PORTAL_SIZE / 2.0f; // 1.0f radius
+    public static final float PORTAL_SIZE = 2.0f;
+    public static final float PORTAL_RADIUS = PORTAL_SIZE / 2.0f;
     public static final int DURATION_TICKS = 300; // 15.0 seconds
+    /** The seal needs a moment to unfold before it can split anything. */
+    public static final int OPEN_TICKS = 6;
+    public static final double PLACE_DISTANCE = 2.5;
+
+    private static final int ECHO_LIFETIME = 100;
+    private static final double ECHO_ANGLE = Math.toRadians(13.0);
+    private static final String ECHO_TAG = "redsha_echo";
+    private static final DustParticleOptions CRIMSON_DUST = new DustParticleOptions(new Vector3f(1.0f, 0.15f, 0.25f), 1.0f);
 
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
     private static final List<ActivePortal> ACTIVE_PORTALS = Collections.synchronizedList(new ArrayList<>());
+    private static final List<Echo> ECHOES = new ArrayList<>();
 
     public RedshaSpell() {
         super(ID, SpellSchool.ARCANE, SpellType.UTILITY,
@@ -51,7 +75,22 @@ public class RedshaSpell extends Spell {
 
     @Override
     public double getRange() {
-        return 2.0;
+        return PLACE_DISTANCE;
+    }
+
+    /**
+     * Seal center for a caster looking ahead (shared with the client preview).
+     */
+    public static Vec3 placement(Level level, Entity caster) {
+        Vec3 eye = caster.getEyePosition();
+        Vec3 look = caster.getViewVector(1.0f);
+        Vec3 wanted = eye.add(look.scale(PLACE_DISTANCE));
+        BlockHitResult hit = level.clip(new ClipContext(eye, wanted, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, caster));
+        if (hit.getType() != HitResult.Type.MISS) {
+            // Never embed the seal in a wall
+            return eye.add(look.scale(Math.max(0.8, hit.getLocation().distanceTo(eye) - 0.4)));
+        }
+        return wanted;
     }
 
     @Override
@@ -60,57 +99,31 @@ public class RedshaSpell extends Spell {
             return false;
         }
 
-        // 1. Calculate portal placement at exactly 2 blocks in front of the caster
-        Vec3 eyePos = player.getEyePosition();
-        Vec3 lookVec = player.getViewVector(1.0f);
-        Vec3 center = eyePos.add(lookVec.scale(2.0));
-
-        Vec3 forward = lookVec.normalize();
+        Vec3 center = placement(serverLevel, player);
+        Vec3 forward = player.getViewVector(1.0f).normalize();
         Vec3 right = forward.cross(new Vec3(0, 1, 0));
-        if (right.lengthSqr() < 1e-4) {
-            right = new Vec3(1, 0, 0);
-        } else {
-            right = right.normalize();
-        }
+        right = right.lengthSqr() < 1e-4 ? new Vec3(1, 0, 0) : right.normalize();
         Vec3 up = right.cross(forward).normalize();
 
         int portalId = NEXT_ID.getAndIncrement();
-        ActivePortal portal = new ActivePortal(portalId, player.getUUID(), serverLevel.dimension(), center, forward, right, up, DURATION_TICKS);
-        ACTIVE_PORTALS.add(portal);
+        ACTIVE_PORTALS.add(new ActivePortal(portalId, player.getUUID(), serverLevel.dimension(), center, forward, right, up, DURATION_TICKS));
 
-        // 2. Broadcast portal spawn to nearby players
-        ModNetwork.sendToNearby(
-                new PacketRedshaSpawn(portalId, center, forward, right, up, DURATION_TICKS),
-                serverLevel,
-                center,
-                64.0
-        );
+        ModNetwork.sendToNearby(new PacketRedshaSpawn(portalId, center, forward, right, up, DURATION_TICKS),
+                serverLevel, center, 64.0);
 
-        // 3. Audio & Particle effects on placement
+        // Crystalline unfolding (no thunder)
         serverLevel.playSound(null, center.x, center.y, center.z,
-                SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.0f, 1.8f);
+                SoundEvents.ILLUSIONER_PREPARE_MIRROR, SoundSource.PLAYERS, 1.0f, 1.3f);
         serverLevel.playSound(null, center.x, center.y, center.z,
-                SoundEvents.EVOKER_CAST_SPELL, SoundSource.PLAYERS, 0.8f, 1.2f);
+                SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 1.3f, 0.8f);
         serverLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 1.0f, 1.0f);
-
-        // Initial circular ring spark burst
-        int segments = 24;
-        for (int i = 0; i < segments; i++) {
-            double angle = (i * 2.0 * Math.PI) / segments;
-            double u = Math.cos(angle) * PORTAL_RADIUS;
-            double v = Math.sin(angle) * PORTAL_RADIUS;
-            Vec3 pos = center.add(right.scale(u)).add(up.scale(v));
-            serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK,
-                    pos.x, pos.y, pos.z,
-                    1, 0.01, 0.01, 0.01, 0.02);
-            serverLevel.sendParticles(ParticleTypes.CRIMSON_SPORE,
-                    pos.x, pos.y, pos.z,
-                    2, 0.02, 0.02, 0.02, 0.01);
-        }
-
+                SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 1.0f, 1.2f);
         return true;
     }
+
+    // ------------------------------------------------------------------
+    // Portal data
+    // ------------------------------------------------------------------
 
     public static class ActivePortal {
         public final int id;
@@ -139,26 +152,28 @@ public class RedshaSpell extends Spell {
             this.ticksActive = 0;
         }
 
+        public boolean isOpen() {
+            return ticksActive >= OPEN_TICKS && remainingTicks > 0;
+        }
+
+        /**
+         * Whether the segment start→end crosses the seal's disc (with a little tolerance at the rim).
+         */
         public boolean intersectsRay(Vec3 start, Vec3 end, Vec3[] outHit) {
             Vec3 seg = end.subtract(start);
             double denom = seg.dot(this.forward);
             if (Math.abs(denom) < 1e-6) {
                 return false;
             }
-
             double t = center.subtract(start).dot(this.forward) / denom;
-            if (t < -0.05 || t > 1.05) {
+            if (t < 0.0 || t > 1.0) {
                 return false;
             }
-
             Vec3 hit = start.add(seg.scale(t));
             Vec3 diff = hit.subtract(center);
             double u = diff.dot(right);
             double v = diff.dot(up);
-
-            // Within 2x2 bounds (check both circular radius 1.15 and square 1.1)
-            double distSq = u * u + v * v;
-            if (distSq <= (1.15 * 1.15) || (Math.abs(u) <= 1.1 && Math.abs(v) <= 1.1)) {
+            if (u * u + v * v <= (radius + 0.2) * (radius + 0.2)) {
                 if (outHit != null && outHit.length > 0) {
                     outHit[0] = hit;
                 }
@@ -178,45 +193,50 @@ public class RedshaSpell extends Spell {
         }
     }
 
+    /** A temporary echo and how many ticks it has lived. */
+    private static final class Echo {
+        final Entity entity;
+        int age;
+
+        Echo(Entity entity) {
+            this.entity = entity;
+        }
+    }
+
     /**
-     * Finds active portals in the given level intersected by a ray segment.
+     * Open portals in the level crossed by a ray segment.
      */
     public static List<IntersectionResult> findIntersections(Level level, Vec3 start, Vec3 end) {
         List<IntersectionResult> results = new ArrayList<>();
         ResourceKey<Level> dim = level.dimension();
         Vec3[] hitHolder = new Vec3[1];
-
         synchronized (ACTIVE_PORTALS) {
             for (ActivePortal portal : ACTIVE_PORTALS) {
-                if (portal.dimension.equals(dim) && portal.remainingTicks > 0) {
-                    if (portal.intersectsRay(start, end, hitHolder)) {
-                        results.add(new IntersectionResult(portal, hitHolder[0]));
-                    }
+                if (portal.dimension.equals(dim) && portal.isOpen() && portal.intersectsRay(start, end, hitHolder)) {
+                    results.add(new IntersectionResult(portal, hitHolder[0]));
                 }
             }
         }
         return results;
     }
 
-    /**
-     * Triggers portal amplification visuals and sounds when a spell passes through it.
-     */
     public static void triggerPortalAmplification(ServerLevel level, ActivePortal portal, Vec3 hitPos) {
-        ModNetwork.sendToNearby(new PacketRedshaTrigger(portal.id, hitPos), level, portal.center, 64.0);
+        triggerPortalAmplification(level, portal, hitPos, new int[0]);
+    }
 
-        // Sharp resonant chime sound
-        level.playSound(null, hitPos.x, hitPos.y, hitPos.z,
-                SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.4f, 1.8f);
-        level.playSound(null, hitPos.x, hitPos.y, hitPos.z,
-                SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.PLAYERS, 0.4f, 2.0f);
+    /**
+     * Flash, chime and sparks when something crosses the seal.
+     */
+    public static void triggerPortalAmplification(ServerLevel level, ActivePortal portal, Vec3 hitPos, int[] echoIds) {
+        ModNetwork.sendToNearby(new PacketRedshaTrigger(portal.id, hitPos, echoIds), level, portal.center, 64.0);
 
-        // Flash and spark burst at the intersection point
-        level.sendParticles(ParticleTypes.ELECTRIC_SPARK,
-                hitPos.x, hitPos.y, hitPos.z,
-                12, 0.12, 0.12, 0.12, 0.08);
-        level.sendParticles(ParticleTypes.CRIMSON_SPORE,
-                hitPos.x, hitPos.y, hitPos.z,
-                8, 0.15, 0.15, 0.15, 0.05);
+        // Glassy, resonant split (no thunder)
+        level.playSound(null, hitPos.x, hitPos.y, hitPos.z,
+                SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.6f, 1.6f);
+        level.playSound(null, hitPos.x, hitPos.y, hitPos.z,
+                SoundEvents.AMETHYST_CLUSTER_BREAK, SoundSource.PLAYERS, 0.8f, 1.9f);
+        level.playSound(null, hitPos.x, hitPos.y, hitPos.z,
+                SoundEvents.ILLUSIONER_MIRROR_MOVE, SoundSource.PLAYERS, 0.6f, 1.8f);
     }
 
     /**
@@ -227,17 +247,21 @@ public class RedshaSpell extends Spell {
         double sinTheta = Math.sin(theta);
         Vec3 cross = axis.cross(v);
         double dot = axis.dot(v);
-
-        return v.scale(cosTheta)
-                .add(cross.scale(sinTheta))
-                .add(axis.scale(dot * (1.0 - cosTheta)));
+        return v.scale(cosTheta).add(cross.scale(sinTheta)).add(axis.scale(dot * (1.0 - cosTheta)));
     }
 
+    // ------------------------------------------------------------------
+    // Server tick
+    // ------------------------------------------------------------------
+
     /**
-     * Ticks active portals on the server, removes expired ones, and duplicates passing entity projectiles.
+     * Runs at the end of every server tick: entities have already moved this tick,
+     * so (xOld → position) is exactly the path each projectile travelled.
      */
     public static void tickServer(MinecraftServer server) {
-        if (ACTIVE_PORTALS.isEmpty() || server == null) return;
+        if (server == null) return;
+        tickEchoes(server);
+        if (ACTIVE_PORTALS.isEmpty()) return;
 
         synchronized (ACTIVE_PORTALS) {
             Iterator<ActivePortal> iterator = ACTIVE_PORTALS.iterator();
@@ -251,68 +275,114 @@ public class RedshaSpell extends Spell {
                     iterator.remove();
                     continue;
                 }
-
                 if (portal.remainingTicks <= 0) {
                     ModNetwork.sendToNearby(new PacketRedshaRemove(portal.id), level, portal.center, 64.0);
                     level.playSound(null, portal.center.x, portal.center.y, portal.center.z,
-                            SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 0.6f, 1.8f);
+                            SoundEvents.AMETHYST_BLOCK_BREAK, SoundSource.PLAYERS, 1.0f, 0.7f);
                     iterator.remove();
                     continue;
                 }
-
-                // Check for physical projectiles entering the 2x2 portal boundary
-                if (portal.ticksActive % 2 == 0) {
-                    tickPhysicalProjectiles(level, portal);
+                if (portal.isOpen()) {
+                    splitProjectiles(level, portal);
                 }
             }
         }
     }
 
-    private static void tickPhysicalProjectiles(ServerLevel level, ActivePortal portal) {
-        AABB box = new AABB(portal.center.x - 1.5, portal.center.y - 1.5, portal.center.z - 1.5,
-                portal.center.x + 1.5, portal.center.y + 1.5, portal.center.z + 1.5);
+    private static void splitProjectiles(ServerLevel level, ActivePortal portal) {
+        // Wide enough to catch fast projectiles that crossed the seal during this tick
+        AABB box = new AABB(portal.center, portal.center).inflate(PORTAL_RADIUS + 4.5);
+        String seenTag = "redsha_seen_" + portal.id;
+        List<Projectile> projectiles = level.getEntitiesOfClass(Projectile.class, box, p -> p.isAlive()
+                && !p.getTags().contains(ECHO_TAG) && !p.getTags().contains(seenTag)
+                && !(p instanceof FishingHook) && !(p instanceof ThrownEnderpearl));
 
-        List<Projectile> projectiles = level.getEntitiesOfClass(Projectile.class, box,
-                p -> p.isAlive() && !p.getTags().contains("redsha_duplicated"));
-
+        Vec3[] hitHolder = new Vec3[1];
         for (Projectile proj : projectiles) {
-            Vec3 pos = proj.position();
+            Vec3 now = proj.position();
+            Vec3 before = new Vec3(proj.xOld, proj.yOld, proj.zOld);
+            if (before.distanceToSqr(now) < 1.0E-6) continue;
+            if (!portal.intersectsRay(before, now, hitHolder)) continue;
+
+            proj.addTag(seenTag);
+            Vec3 hit = hitHolder[0];
             Vec3 vel = proj.getDeltaMovement();
-            if (vel.lengthSqr() < 0.001) continue;
+            List<Integer> echoIds = new ArrayList<>(2);
+            for (int side = -1; side <= 1; side += 2) {
+                Entity echo = spawnEcho(level, proj, hit, rotateAroundAxis(vel, portal.up, ECHO_ANGLE * side), seenTag);
+                if (echo != null) echoIds.add(echo.getId());
+            }
+            triggerPortalAmplification(level, portal, hit, echoIds.stream().mapToInt(Integer::intValue).toArray());
+        }
+    }
 
-            Vec3 prevPos = pos.subtract(vel);
-            Vec3[] hitHolder = new Vec3[1];
-            if (portal.intersectsRay(prevPos, pos.add(vel), hitHolder) || pos.distanceTo(portal.center) <= PORTAL_RADIUS + 0.2) {
-                Vec3 hit = hitHolder[0] != null ? hitHolder[0] : pos;
-                proj.addTag("redsha_duplicated");
-                triggerPortalAmplification(level, portal, hit);
+    /**
+     * Temporary copy of a projectile: same type and data, new direction, never collectable.
+     */
+    private static Entity spawnEcho(ServerLevel level, Projectile original, Vec3 pos, Vec3 velocity, String seenTag) {
+        try {
+            CompoundTag data = original.saveWithoutId(new CompoundTag());
+            data.remove("UUID");
+            Entity copy = original.getType().create(level);
+            if (copy == null) return null;
+            copy.load(data);
+            copy.setPos(pos.x, pos.y, pos.z);
+            copy.xOld = pos.x;
+            copy.yOld = pos.y;
+            copy.zOld = pos.z;
+            copy.setDeltaMovement(velocity);
+            double horizontal = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            copy.setYRot((float) (Math.atan2(velocity.x, velocity.z) * (180.0 / Math.PI)));
+            copy.setXRot((float) (Math.atan2(velocity.y, horizontal) * (180.0 / Math.PI)));
+            copy.yRotO = copy.getYRot();
+            copy.xRotO = copy.getXRot();
 
-                // Duplicate arrows / projectiles if supported
-                if (proj instanceof AbstractArrow originalArrow) {
-                    try {
-                        AbstractArrow copy1 = (AbstractArrow) originalArrow.getType().create(level);
-                        AbstractArrow copy2 = (AbstractArrow) originalArrow.getType().create(level);
-                        if (copy1 != null && copy2 != null) {
-                            Vec3 vel1 = rotateAroundAxis(vel, portal.up, Math.toRadians(15.0));
-                            Vec3 vel2 = rotateAroundAxis(vel, portal.up, Math.toRadians(-15.0));
+            if (copy instanceof AbstractArrow arrow) {
+                arrow.pickup = AbstractArrow.Pickup.DISALLOWED;
+            }
+            if (copy instanceof AbstractHurtingProjectile hurting && original instanceof AbstractHurtingProjectile source) {
+                double speed = Math.sqrt(source.xPower * source.xPower + source.yPower * source.yPower + source.zPower * source.zPower);
+                Vec3 dir = velocity.normalize().scale(speed);
+                hurting.xPower = dir.x;
+                hurting.yPower = dir.y;
+                hurting.zPower = dir.z;
+            }
+            copy.addTag(ECHO_TAG);
+            copy.addTag(seenTag);
+            if (!level.addFreshEntity(copy)) return null;
+            synchronized (ECHOES) {
+                ECHOES.add(new Echo(copy));
+            }
+            return copy;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
 
-                            copy1.setPos(hit.x, hit.y, hit.z);
-                            copy1.setDeltaMovement(vel1);
-                            copy1.setOwner(originalArrow.getOwner());
-                            copy1.setBaseDamage(originalArrow.getBaseDamage());
-                            copy1.addTag("redsha_duplicated");
-
-                            copy2.setPos(hit.x, hit.y, hit.z);
-                            copy2.setDeltaMovement(vel2);
-                            copy2.setOwner(originalArrow.getOwner());
-                            copy2.setBaseDamage(originalArrow.getBaseDamage());
-                            copy2.addTag("redsha_duplicated");
-
-                            level.addFreshEntity(copy1);
-                            level.addFreshEntity(copy2);
-                        }
-                    } catch (Exception ignored) {
+    /**
+     * Echoes dissolve when they hit something, stop moving, or run out of time.
+     */
+    private static void tickEchoes(MinecraftServer server) {
+        synchronized (ECHOES) {
+            if (ECHOES.isEmpty()) return;
+            Iterator<Echo> it = ECHOES.iterator();
+            while (it.hasNext()) {
+                Echo echo = it.next();
+                Entity e = echo.entity;
+                echo.age++;
+                if (e.isRemoved()) {
+                    it.remove();
+                    continue;
+                }
+                boolean landed = e instanceof AbstractArrow arrow && (arrow.shakeTime > 0 || (echo.age > 2 && arrow.getDeltaMovement().lengthSqr() < 0.01));
+                if (landed || echo.age >= ECHO_LIFETIME) {
+                    if (e.level() instanceof ServerLevel level) {
+                        level.sendParticles(CRIMSON_DUST, e.getX(), e.getY(), e.getZ(), 10, 0.15, 0.15, 0.15, 0.02);
+                        level.sendParticles(ParticleTypes.END_ROD, e.getX(), e.getY(), e.getZ(), 4, 0.1, 0.1, 0.1, 0.03);
+                        level.playSound(null, e.getX(), e.getY(), e.getZ(), SoundEvents.AMETHYST_CLUSTER_STEP, SoundSource.PLAYERS, 0.6f, 1.8f);
                     }
+                    e.discard();
+                    it.remove();
                 }
             }
         }
