@@ -180,6 +180,7 @@ public class ClientMagicData {
     }
 
     public static void finishChannelingSuccess() {
+        com.cesar.magicandsorcery.client.render.WandAnimation.onCastReleased();
         isChanneling = false;
         isReadyToCast = false;
         channelTicks = 0;
@@ -256,6 +257,7 @@ public class ClientMagicData {
     private static float radialAimX = 0.0f;
     private static float radialAimY = 0.0f;
     private static int radialHoveredIndex = -1;
+    private static long radialOpenedAtMs = 0L;
 
     // --- DRAG AND DROP DUAL-SOURCE STATE ---
     public enum DragSource {
@@ -479,6 +481,7 @@ public class ClientMagicData {
             cancelChanneling();
         }
         isRadialMenuOpen = true;
+        radialOpenedAtMs = net.minecraft.Util.getMillis();
         dragSource = DragSource.NONE;
         draggedSlotIndex = -1;
         draggedSpellId = null;
@@ -550,6 +553,13 @@ public class ClientMagicData {
             mc.player.setYRot(lockedYaw);
             mc.player.setXRot(lockedPitch);
         }
+    }
+
+    /**
+     * Time the radial menu was opened, used for its opening animation.
+     */
+    public static long getRadialOpenedAtMs() {
+        return radialOpenedAtMs;
     }
 
     public static boolean isRadialMenuOpen() {

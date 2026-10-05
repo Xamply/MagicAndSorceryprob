@@ -33,7 +33,13 @@ public class MagicWandItem extends Item implements ICatalyst {
 
     @Override
     public net.minecraft.world.item.UseAnim getUseAnimation(ItemStack stack) {
-        return net.minecraft.world.item.UseAnim.BOW;
+        // Custom staff animation (see WandAnimation) replaces the bow pose
+        return net.minecraft.world.item.UseAnim.NONE;
+    }
+
+    @Override
+    public void initializeClient(java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
+        consumer.accept(com.cesar.magicandsorcery.client.render.WandAnimation.ITEM_EXTENSIONS);
     }
 
     @Override

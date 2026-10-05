@@ -3,7 +3,9 @@ package com.cesar.magicandsorcery.magic.spell.spells;
 import com.cesar.magicandsorcery.MagicAndSorcery;
 import com.cesar.magicandsorcery.magic.catalyst.CastingMethod;
 import com.cesar.magicandsorcery.magic.spell.Spell;
+import com.cesar.magicandsorcery.magic.spell.SpellImpacts;
 import com.cesar.magicandsorcery.magic.spell.SpellSchool;
+import com.cesar.magicandsorcery.magic.spell.SpellTargeting;
 import com.cesar.magicandsorcery.magic.spell.SpellType;
 import com.cesar.magicandsorcery.network.ModNetwork;
 import com.cesar.magicandsorcery.network.packets.PacketFallingSwordStrike;
@@ -115,11 +117,13 @@ public class LaPollaCayendoSpell extends Spell {
         Vec3 eyePos = player.getEyePosition();
         Vec3 lookVec = player.getViewVector(1.0f);
         Vec3 endPos = eyePos.add(lookVec.scale(maxRange));
+        // Water/lava surfaces count as ground so the reticle stays visible on top of the liquid
+        ClipContext.Fluid fluid = SpellTargeting.aimFluidMode(level, eyePos);
 
         BlockHitResult hit = level.clip(new ClipContext(
                 eyePos, endPos,
                 ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
+                fluid,
                 player
         ));
 
@@ -128,33 +132,19 @@ public class LaPollaCayendoSpell extends Spell {
                 return hit.getLocation();
             }
             Vec3 hitLoc = hit.getLocation();
-            BlockHitResult downHit = level.clip(new ClipContext(
-                    hitLoc,
-                    new Vec3(hitLoc.x, level.getMinBuildHeight(), hitLoc.z),
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    player
-            ));
-            if (downHit.getType() == HitResult.Type.BLOCK) {
-                return downHit.getLocation();
-            }
-            return hitLoc;
+            Vec3 ground = SpellTargeting.dropToGround(level, hitLoc, player, fluid);
+            return ground != null ? ground : hitLoc;
         }
 
         double flatDist = Math.sqrt(lookVec.x * lookVec.x + lookVec.z * lookVec.z);
         double targetX = eyePos.x + (flatDist > 0.001 ? (lookVec.x / flatDist) * maxRange * 0.75 : 0);
         double targetZ = eyePos.z + (flatDist > 0.001 ? (lookVec.z / flatDist) * maxRange * 0.75 : 0);
 
-        BlockHitResult skyDownHit = level.clip(new ClipContext(
+        Vec3 skyGround = SpellTargeting.dropToGround(level,
                 new Vec3(targetX, Math.min(level.getMaxBuildHeight() - 2, player.getY() + 30.0), targetZ),
-                new Vec3(targetX, level.getMinBuildHeight(), targetZ),
-                ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
-                player
-        ));
-
-        if (skyDownHit.getType() == HitResult.Type.BLOCK) {
-            return skyDownHit.getLocation();
+                player, fluid);
+        if (skyGround != null) {
+            return skyGround;
         }
 
         return new Vec3(targetX, player.getY(), targetZ);
@@ -278,13 +268,11 @@ public class LaPollaCayendoSpell extends Spell {
                 if (target != player) {
                     target.setLastHurtByPlayer(player);
                 }
-
-                // Severe physical knockback outward and upward
-                double dist = Math.max(0.1, Math.sqrt(distSq));
-                target.push((-dx / dist) * 1.8, 0.75, (-dz / dist) * 1.8);
-                target.hurtMarked = true;
             }
         }
+
+        // Falling impact counts as a push: shockwave throws everything nearby outward and upward
+        SpellImpacts.shockwave(level, new Vec3(center.x, obstacleY, center.z), 9.0, 1.9, 0.8);
 
         // 2. EXPLOSION
         // Generates a controlled high-potency explosion to complement physical destruction

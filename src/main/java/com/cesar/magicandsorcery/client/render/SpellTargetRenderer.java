@@ -69,7 +69,7 @@ public class SpellTargetRenderer {
         BlockHitResult blockHit = mc.level.clip(new ClipContext(
                 eyePos, endPos,
                 ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
+                com.cesar.magicandsorcery.magic.spell.SpellTargeting.aimFluidMode(mc.level, eyePos),
                 mc.player
         ));
 
@@ -105,22 +105,18 @@ public class SpellTargetRenderer {
             );
         }
 
-        // Colors based on spell school & readiness
-        float r = 0.3f, g = 0.8f, b = 1.0f; // Default cyan
-        switch (spell.getSchool()) {
-            case LIGHTNING -> { r = 0.2f; g = 0.9f; b = 1.0f; } // Electric cyan
-            case ICE -> { r = 0.4f; g = 0.7f; b = 1.0f; }       // Ice frost blue
-            case TELEPORTATION -> { r = 0.9f; g = 0.3f; b = 1.0f; } // Ethereal purple
-            default -> {}
-        }
+        // Each spell has its own color; the box breathes while charging and glows when ready
+        com.cesar.magicandsorcery.client.SpellVisuals.Style style = com.cesar.magicandsorcery.client.SpellVisuals.of(spell);
+        float r = style.r(), g = style.g(), b = style.b();
 
         boolean isReady = ClientMagicData.isReadyToCast();
-        float alphaFill = isReady ? 0.45f : 0.25f;
-        float alphaLine = isReady ? 1.0f : 0.75f;
+        float pulse = 0.5f + 0.5f * (float) Math.sin((mc.player.tickCount + partialTick) * (isReady ? 0.35f : 0.15f));
+        float alphaFill = isReady ? 0.35f + 0.2f * pulse : 0.15f + 0.1f * pulse;
+        float alphaLine = isReady ? 1.0f : 0.6f + 0.3f * pulse;
         if (isReady) {
-            // Pulsing / glowing ready highlight
-            r = Math.min(1.0f, r + 0.2f);
-            g = Math.min(1.0f, g + 0.2f);
+            r = Math.min(1.0f, r + 0.25f * pulse);
+            g = Math.min(1.0f, g + 0.25f * pulse);
+            b = Math.min(1.0f, b + 0.25f * pulse);
         }
 
         Camera camera = event.getCamera();

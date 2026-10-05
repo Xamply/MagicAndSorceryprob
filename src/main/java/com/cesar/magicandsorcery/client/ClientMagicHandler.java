@@ -132,13 +132,10 @@ public class ClientMagicHandler {
                     if (event.getAction() == GLFW.GLFW_PRESS) {
                         // 1. Check Scrollbar click in Library
                         int libX = RadialMenuRenderer.getLibraryX(screenWidth);
-                        int libY = RadialMenuRenderer.getLibraryY(screenHeight);
-                        int libWidth = RadialMenuRenderer.getLibraryWidth(screenWidth);
-                        int libHeight = RadialMenuRenderer.getLibraryHeight(screenHeight);
-                        int listY = libY + 22;
-                        int listHeight = libHeight - 25;
-                        int sbX = libX + libWidth - 8;
-                        int sbWidth = 6;
+                        int listY = RadialMenuRenderer.getLibraryListY(screenHeight);
+                        int listHeight = RadialMenuRenderer.getLibraryListHeight(screenHeight);
+                        int sbX = RadialMenuRenderer.getLibraryScrollBarX(screenWidth);
+                        int sbWidth = RadialMenuRenderer.LIBRARY_SCROLLBAR_WIDTH;
 
                         if (mouseX >= sbX - 2 && mouseX <= sbX + sbWidth + 2 && mouseY >= listY && mouseY <= listY + listHeight) {
                             ClientMagicData.setDraggingScrollBar(true);
@@ -220,11 +217,10 @@ public class ClientMagicHandler {
                     if (RadialMenuRenderer.isMouseInsideLibrary(mouseX, mouseY, screenWidth, screenHeight)) {
                         // Scroll Library list
                         int itemHeight = RadialMenuRenderer.LIBRARY_ITEM_HEIGHT;
-                        int libHeight = RadialMenuRenderer.getLibraryHeight(screenHeight);
-                        int listHeight = libHeight - 25;
+                        int listHeight = RadialMenuRenderer.getLibraryListHeight(screenHeight);
                         int totalH = ClientMagicData.getLearnedSpells().size() * itemHeight;
                         int maxScroll = Math.max(0, totalH - listHeight);
-                        ClientMagicData.scrollLibrary((float) (-delta * 17.0), maxScroll);
+                        ClientMagicData.scrollLibrary((float) (-delta * itemHeight), maxScroll);
                     } else {
                         // Cycle radial wheel hovered slot
                         ClientMagicData.cycleRadialHovered(delta > 0);

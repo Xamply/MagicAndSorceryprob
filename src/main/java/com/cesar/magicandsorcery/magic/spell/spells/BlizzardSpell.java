@@ -59,7 +59,8 @@ public class BlizzardSpell extends Spell {
         Vec3 endPos = eyePos.add(lookVec.scale(reach));
 
         // 1. Block collision check
-        BlockHitResult blockHit = level.clip(new ClipContext(eyePos, endPos, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+        BlockHitResult blockHit = level.clip(new ClipContext(eyePos, endPos, ClipContext.Block.COLLIDER,
+                com.cesar.magicandsorcery.magic.spell.SpellTargeting.aimFluidMode(level, eyePos), player));
         Vec3 hitPos = blockHit.getType() != HitResult.Type.MISS ? blockHit.getLocation() : endPos;
 
         // 2. Entity collision check: entities act as obstacles stopping the spell

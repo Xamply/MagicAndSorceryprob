@@ -144,26 +144,40 @@ public class RadialMenuRenderer {
     public static final int TOTAL_SLOTS = 9;
     public static final float INNER_CANCEL_RADIUS = 32.0f;
     public static final float OUTER_RADIUS = 80.0f;
-    public static final int LIBRARY_ITEM_HEIGHT = 17;
+    public static final int LIBRARY_ITEM_HEIGHT = 18;
+    public static final int LIBRARY_HEADER_HEIGHT = 24;
+    public static final int LIBRARY_SCROLLBAR_WIDTH = 4;
 
     // Library Panel Geometry (Compact and anchored to the left)
     public static int getLibraryX(int screenWidth) {
-        return 10;
+        return 12;
     }
 
     public static int getLibraryWidth(int screenWidth) {
-        return Math.min(108, Math.max(90, (int) (screenWidth * 0.21f)));
+        return Math.min(118, Math.max(92, (int) (screenWidth * 0.22f)));
     }
 
     public static int getLibraryHeight(int screenHeight) {
         int availableH = Math.max(90, (screenHeight - 50) - 16);
-        return Math.min(155, availableH);
+        return Math.min(170, availableH);
     }
 
     public static int getLibraryY(int screenHeight) {
         int availableH = Math.max(90, (screenHeight - 50) - 16);
         int h = getLibraryHeight(screenHeight);
         return 16 + (availableH - h) / 2;
+    }
+
+    public static int getLibraryListY(int screenHeight) {
+        return getLibraryY(screenHeight) + LIBRARY_HEADER_HEIGHT + 2;
+    }
+
+    public static int getLibraryListHeight(int screenHeight) {
+        return getLibraryHeight(screenHeight) - LIBRARY_HEADER_HEIGHT - 6;
+    }
+
+    public static int getLibraryScrollBarX(int screenWidth) {
+        return getLibraryX(screenWidth) + getLibraryWidth(screenWidth) - LIBRARY_SCROLLBAR_WIDTH - 3;
     }
 
     public static boolean isMouseInsideLibrary(double mouseX, double mouseY, int screenWidth, int screenHeight) {

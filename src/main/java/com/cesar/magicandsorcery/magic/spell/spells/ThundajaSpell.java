@@ -3,7 +3,9 @@ package com.cesar.magicandsorcery.magic.spell.spells;
 import com.cesar.magicandsorcery.MagicAndSorcery;
 import com.cesar.magicandsorcery.magic.catalyst.CastingMethod;
 import com.cesar.magicandsorcery.magic.spell.Spell;
+import com.cesar.magicandsorcery.magic.spell.SpellImpacts;
 import com.cesar.magicandsorcery.magic.spell.SpellSchool;
+import com.cesar.magicandsorcery.magic.spell.SpellTargeting;
 import com.cesar.magicandsorcery.magic.spell.SpellType;
 import com.cesar.magicandsorcery.network.ModNetwork;
 import com.cesar.magicandsorcery.network.packets.PacketThundajaImpact;
@@ -134,12 +136,14 @@ public class ThundajaSpell extends Spell {
         Vec3 eyePos = player.getEyePosition();
         Vec3 lookVec = player.getViewVector(1.0f);
         Vec3 endPos = eyePos.add(lookVec.scale(maxRange));
+        // Water/lava surfaces count as ground so the storm circle stays visible on top of the liquid
+        ClipContext.Fluid fluid = SpellTargeting.aimFluidMode(level, eyePos);
 
         // 1. Raycast along line of sight for blocks
         BlockHitResult blockHit = level.clip(new ClipContext(
                 eyePos, endPos,
                 ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
+                fluid,
                 player
         ));
         Vec3 maxCheckPos = (blockHit.getType() != HitResult.Type.MISS) ? blockHit.getLocation() : endPos;
@@ -163,17 +167,8 @@ public class ThundajaSpell extends Spell {
 
         if (entityHit != null && entityHit.getEntity() != null) {
             Entity targetEnt = entityHit.getEntity();
-            BlockHitResult downHit = level.clip(new ClipContext(
-                    targetEnt.position().add(0, 0.5, 0),
-                    new Vec3(targetEnt.getX(), level.getMinBuildHeight(), targetEnt.getZ()),
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    player
-            ));
-            if (downHit.getType() == HitResult.Type.BLOCK) {
-                return downHit.getLocation();
-            }
-            return targetEnt.position();
+            Vec3 ground = SpellTargeting.dropToGround(level, targetEnt.position().add(0, 0.5, 0), player, fluid);
+            return ground != null ? ground : targetEnt.position();
         }
 
         // 3. Block hit handling
@@ -188,18 +183,8 @@ public class ThundajaSpell extends Spell {
                     0.0,
                     blockHit.getDirection().getStepZ() * 0.15
             );
-            Vec3 rayStart = hitLoc.add(stepOffset);
-            BlockHitResult downHit = level.clip(new ClipContext(
-                    rayStart,
-                    new Vec3(rayStart.x, level.getMinBuildHeight(), rayStart.z),
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    player
-            ));
-            if (downHit.getType() == HitResult.Type.BLOCK) {
-                return downHit.getLocation();
-            }
-            return hitLoc;
+            Vec3 ground = SpellTargeting.dropToGround(level, hitLoc.add(stepOffset), player, fluid);
+            return ground != null ? ground : hitLoc;
         }
 
         // 4. Looking into open air or sky (MISS):
@@ -210,18 +195,9 @@ public class ThundajaSpell extends Spell {
         double targetZ = eyePos.z + (flatDist > 0.001 ? (lookVec.z / flatDist) * targetDist : 0);
 
         double startY = Math.min(level.getMaxBuildHeight() - 1, player.getY() + 32.0);
-        double endY = level.getMinBuildHeight();
-
-        BlockHitResult groundHit = level.clip(new ClipContext(
-                new Vec3(targetX, startY, targetZ),
-                new Vec3(targetX, endY, targetZ),
-                ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
-                player
-        ));
-
-        if (groundHit.getType() == HitResult.Type.BLOCK) {
-            return groundHit.getLocation();
+        Vec3 ground = SpellTargeting.dropToGround(level, new Vec3(targetX, startY, targetZ), player, fluid);
+        if (ground != null) {
+            return ground;
         }
 
         return new Vec3(targetX, player.getY(), targetZ);
@@ -268,7 +244,10 @@ public class ThundajaSpell extends Spell {
             }
         }
 
-        // 2.2. Destroy the first exposed surface layer of blocks directly struck by lightning in the 13x13 area
+        // 2.2. The falling bolt counts as a push: shockwave throws everything nearby outward and upward
+        SpellImpacts.shockwave(serverLevel, center, 8.5, 1.5, 0.7);
+
+        // 2.3. Destroy the first exposed surface layer of blocks directly struck by lightning in the 13x13 area
         int startY = (int) Math.floor(center.y + 6.0);
         int minY = (int) Math.floor(center.y - 6.0);
         int baseBlockX = (int) Math.floor(center.x);
@@ -300,7 +279,7 @@ public class ThundajaSpell extends Spell {
             }
         }
 
-        // 2.3. Obliterate all dropped items on the ground within the 13x13 area without drops
+        // 2.4. Obliterate all dropped items on the ground within the 13x13 area without drops
         List<ItemEntity> items = serverLevel.getEntitiesOfClass(ItemEntity.class, impactBox,
                 item -> item.isAlive() && Math.abs(center.x - item.getX()) <= 6.5 && Math.abs(center.z - item.getZ()) <= 6.5);
         for (ItemEntity item : items) {

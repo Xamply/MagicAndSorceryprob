@@ -572,7 +572,10 @@ public class ClientThundajaRenderer {
 
         Minecraft mc = Minecraft.getInstance();
         double groundY = center.y;
-        if (mc.level != null && mc.player != null) {
+        // Targets resting on a water/lava surface stay there instead of sinking to the floor below
+        boolean onLiquidSurface = mc.level != null
+                && com.cesar.magicandsorcery.magic.spell.SpellTargeting.isInsideFluid(mc.level, center.subtract(0, 0.05, 0));
+        if (mc.level != null && mc.player != null && !onLiquidSurface) {
             double checkY = Math.min(mc.level.getMaxBuildHeight() - 1, center.y + 2.0);
             BlockHitResult groundHit = mc.level.clip(new ClipContext(
                     new Vec3(center.x, checkY, center.z),
