@@ -1,20 +1,36 @@
 @echo off
-echo ===================================================
-echo   SUBIENDO CAMBIOS DE MAGIC AND SORCERY A GITHUB
-echo ===================================================
+setlocal
+title Magic and Sorcery - Subir y Compilar
+
+echo ========================================================
+echo         MAGIC AND SORCERY - SUBIR A GITHUB
+echo ========================================================
 echo.
-set /p mensaje="Escribe que cambiaste (o presiona Enter para mensaje automatico): "
+set /p mensaje="Describe brevemente tus cambios (o presiona Enter): "
 if "%mensaje%"=="" set mensaje=Actualizacion de Magic and Sorcery (%date% %time%)
+
+echo.
+echo [1/3] Guardando cambios locales...
 git add .
 git commit -m "%mensaje%"
+
 echo.
-echo Subiendo cambios a GitHub...
+echo [2/3] Subiendo cambios a GitHub...
 git push origin main
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo [AVISO] Hubo un problema al subir a GitHub.
+    pause
+    exit /b %ERRORLEVEL%
+)
+
 echo.
-echo Compilando el mod y actualizando tu Launcher...
+echo [3/3] Compilando mod y actualizando tu Launcher...
 call gradlew.bat build -x test
+
 echo.
-echo ===================================================
-echo   TODO LISTO! Tus cambios ya estan en GitHub y en tu juego.
-echo ===================================================
+echo ========================================================
+echo   [COMPLETADO] Cambios subidos a GitHub y mod compilado!
+echo ========================================================
+echo.
 pause
