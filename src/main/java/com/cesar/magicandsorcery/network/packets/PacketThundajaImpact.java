@@ -3,6 +3,8 @@ package com.cesar.magicandsorcery.network.packets;
 import com.cesar.magicandsorcery.client.render.ClientThundajaRenderer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -45,7 +47,9 @@ public class PacketThundajaImpact {
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context ctx = supplier.get();
         ctx.enqueueWork(() -> {
-            ClientThundajaRenderer.triggerImpact(casterId, new Vec3(targetX, targetY, targetZ), seed);
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                ClientThundajaRenderer.triggerImpact(casterId, new Vec3(targetX, targetY, targetZ), seed);
+            });
         });
         return true;
     }

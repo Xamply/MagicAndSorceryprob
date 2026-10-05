@@ -5,6 +5,9 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
 
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
+
 import java.util.function.Supplier;
 
 public class PacketBoltVisual {
@@ -49,7 +52,9 @@ public class PacketBoltVisual {
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context ctx = supplier.get();
         ctx.enqueueWork(() -> {
-            ClientLightningHandler.addBolt(new Vec3(startX, startY, startZ), new Vec3(endX, endY, endZ), seed);
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                ClientLightningHandler.addBolt(new Vec3(startX, startY, startZ), new Vec3(endX, endY, endZ), seed);
+            });
         });
         return true;
     }

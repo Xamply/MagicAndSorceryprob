@@ -100,6 +100,12 @@ public class ModNetwork {
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketDivineSwordChannel::handle)
                 .add();
 
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketDivineSwordChannelState.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketDivineSwordChannelState::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketDivineSwordChannelState::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketDivineSwordChannelState::handle)
+                .add();
+
         INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketDivineSwordSweep.class, id(), NetworkDirection.PLAY_TO_CLIENT)
                 .decoder(com.cesar.magicandsorcery.network.packets.PacketDivineSwordSweep::new)
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketDivineSwordSweep::toBytes)

@@ -5,6 +5,9 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
 
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
+
 import java.util.function.Supplier;
 
 public class PacketBlizzardTornado {
@@ -41,7 +44,9 @@ public class PacketBlizzardTornado {
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context ctx = supplier.get();
         ctx.enqueueWork(() -> {
-            ClientTornadoHandler.addTornado(new Vec3(x, y, z), durationTicks, seed);
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                ClientTornadoHandler.addTornado(new Vec3(x, y, z), durationTicks, seed);
+            });
         });
         return true;
     }
