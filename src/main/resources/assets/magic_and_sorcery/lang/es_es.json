@@ -26,17 +26,21 @@
   "spell.magic_and_sorcery.divine_sword.desc": "Invoca una espada divina gigante que realiza un devastador barrido frontal.",
   "spell.magic_and_sorcery.la_polla_cayendo": "La polla cayendo",
   "spell.magic_and_sorcery.la_polla_cayendo.desc": "Invoca una espada celestial que se transforma en una colosal hoja de impacto destructivo.",
+  "spell.magic_and_sorcery.redsha": "Redsha",
+  "spell.magic_and_sorcery.redsha.desc": "Crea un portal mágico de 2x2 bloques a 2 bloques de distancia. Los hechizos de proyectiles que lo atraviesan generan 2 copias adicionales idénticas.",
 
   "school.magic_and_sorcery.ice": "Hielo",
   "school.magic_and_sorcery.lightning": "Rayo",
   "school.magic_and_sorcery.teleportation": "Teletransporte",
   "school.magic_and_sorcery.holy": "Sagrada",
   "school.magic_and_sorcery.physical": "Física",
+  "school.magic_and_sorcery.arcane": "Arcano",
 
   "spelltype.magic_and_sorcery.single_target": "Objetivo",
   "spelltype.magic_and_sorcery.area": "Área",
   "spelltype.magic_and_sorcery.mobility": "Movilidad",
   "spelltype.magic_and_sorcery.destruction": "Destrucción",
+  "spelltype.magic_and_sorcery.utility": "Utilidad",
 
   "tooltip.magic_and_sorcery.catalyst_type": "Catalizador: %s",
   "tooltip.magic_and_sorcery.wand_desc": "\"Potencia sobre velocidad.\"",

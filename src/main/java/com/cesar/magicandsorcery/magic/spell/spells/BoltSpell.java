@@ -10,6 +10,7 @@ import com.cesar.magicandsorcery.magic.spell.SpellType;
 import com.cesar.magicandsorcery.network.ModNetwork;
 import com.cesar.magicandsorcery.network.packets.PacketBoltVisual;
 import com.cesar.magicandsorcery.sound.ModSounds;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,10 +24,12 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -134,6 +137,24 @@ public class BoltSpell extends Spell {
                     SoundEvents.TRIDENT_THUNDER, SoundSource.PLAYERS, 0.5f, 1.8f);
         }
 
+        // 7. REDSHA INTERACTION: Check if the bolt passes through an active Redsha circle
+        List<RedshaSpell.IntersectionResult> intersections = RedshaSpell.findIntersections(serverLevel, catalystPos, hitPos);
+        if (intersections.isEmpty()) {
+            intersections = RedshaSpell.findIntersections(serverLevel, eyePos, hitPos);
+        }
+
+        for (RedshaSpell.IntersectionResult res : intersections) {
+            RedshaSpell.triggerPortalAmplification(serverLevel, res.portal, res.hitPos);
+
+            // Create 2 additional copies of the bolt fanning out through the circle (total 3 bolts)
+            Vec3 mainDir = lookVec.normalize();
+            Vec3 dir1 = RedshaSpell.rotateAroundAxis(mainDir, res.portal.up, Math.toRadians(15.0));
+            Vec3 dir2 = RedshaSpell.rotateAroundAxis(mainDir, res.portal.up, Math.toRadians(-15.0));
+
+            fireBoltRay(player, serverLevel, res.hitPos, dir1, REACH, finalDamage);
+            fireBoltRay(player, serverLevel, res.hitPos, dir2, REACH, finalDamage);
+        }
+
         return true;
     }
 
@@ -165,5 +186,61 @@ public class BoltSpell extends Spell {
             bestDist = d;
         }
         return best;
+    }
+
+    /**
+     * Fires a duplicated bolt ray originating from a Redsha magic circle with identical properties.
+     */
+    private void fireBoltRay(ServerPlayer player, ServerLevel serverLevel, Vec3 origin, Vec3 direction, double reach, float damage) {
+        Vec3 endPos = origin.add(direction.scale(reach));
+
+        // 1. Block raycast
+        BlockHitResult blockHit = serverLevel.clip(new ClipContext(origin, endPos, ClipContext.Block.COLLIDER,
+                SpellTargeting.aimFluidMode(serverLevel, origin), player));
+        Vec3 hitPos = blockHit.getType() != HitResult.Type.MISS ? blockHit.getLocation() : endPos;
+
+        // 2. Entity raycast
+        AABB searchBox = new AABB(origin, hitPos).inflate(2.0);
+        EntityHitResult entityHit = null;
+        double closestDistSq = origin.distanceToSqr(hitPos);
+
+        for (Entity entity : serverLevel.getEntities(player, searchBox, e -> !e.isSpectator() && e.isPickable() && e != player)) {
+            AABB entityBox = entity.getBoundingBox().inflate(0.3);
+            java.util.Optional<Vec3> clip = entityBox.clip(origin, hitPos);
+            if (clip.isPresent()) {
+                double distSq = origin.distanceToSqr(clip.get());
+                if (distSq < closestDistSq) {
+                    closestDistSq = distSq;
+                    entityHit = new EntityHitResult(entity, clip.get());
+                }
+            }
+        }
+
+        if (entityHit != null && entityHit.getEntity() instanceof LivingEntity target) {
+            hitPos = entityHit.getLocation();
+            strike(player, target, damage, direction, 1.25, 0.5);
+        }
+
+        // Spark at origin on magic circle
+        serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                origin.x, origin.y, origin.z,
+                4, 0.03, 0.03, 0.03, 0.03);
+
+        // Visual lightning bolt
+        ModNetwork.sendToNearby(new PacketBoltVisual(origin, hitPos, serverLevel.getRandom().nextLong(),
+                entityHit != null, Collections.emptyList()), serverLevel, origin.lerp(hitPos, 0.5), 80.0);
+
+        // Impact spark discharge
+        serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                hitPos.x, hitPos.y, hitPos.z,
+                8, 0.10, 0.10, 0.10, 0.06);
+
+        // Sound effect
+        serverLevel.playSound(null, origin.x, origin.y, origin.z,
+                ModSounds.BOLT.get(), SoundSource.PLAYERS, 0.9f, 1.05f);
+        if (origin.distanceTo(hitPos) > 16.0) {
+            serverLevel.playSound(null, hitPos.x, hitPos.y, hitPos.z,
+                    ModSounds.BOLT.get(), SoundSource.PLAYERS, 0.8f, 1.05f);
+        }
     }
 }

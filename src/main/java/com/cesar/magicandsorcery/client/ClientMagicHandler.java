@@ -403,6 +403,12 @@ public class ClientMagicHandler {
             ));
         }
 
+        if (spell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID) && mc.player != null) {
+            ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketRedshaChannel(
+                    com.cesar.magicandsorcery.network.packets.PacketRedshaChannel.ACTION_START
+            ));
+        }
+
         int castTime = spell.calculateFinalCastTime(method);
         if (castTime <= 0) {
             // Instant spell is ready immediately!

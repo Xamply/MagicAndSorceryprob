@@ -88,6 +88,7 @@ public class PlayerMagicEvents {
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             BlizzardSpell.tickActiveZones();
+            com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.tickServer(event.getServer());
         }
     }
 }

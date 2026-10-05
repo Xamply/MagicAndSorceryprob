@@ -58,6 +58,7 @@ public class PlayerMagicData {
         preparedSpells.set(3, ThundajaSpell.ID);
         preparedSpells.set(4, com.cesar.magicandsorcery.magic.spell.spells.DivineSwordSpell.ID);
         preparedSpells.set(5, com.cesar.magicandsorcery.magic.spell.spells.LaPollaCayendoSpell.ID);
+        preparedSpells.set(6, com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID);
     }
 
     private void ensureCapacity() {

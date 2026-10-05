@@ -33,6 +33,7 @@ public final class SpellVisuals {
         STYLES.put(ThundajaSpell.ID, new Style(0xFF5C7CFF, 0xFF141F66, "☈"));
         STYLES.put(DivineSwordSpell.ID, new Style(0xFFFFB347, 0xFF5C3608, "†"));
         STYLES.put(LaPollaCayendoSpell.ID, new Style(0xFFFF4D5E, 0xFF5C0A14, "⚔"));
+        STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID, new Style(0xFFFF3344, 0xFF5C0810, "❂"));
     }
 
     private SpellVisuals() {

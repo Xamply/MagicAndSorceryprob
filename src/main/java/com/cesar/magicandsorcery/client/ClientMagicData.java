@@ -181,6 +181,14 @@ public class ClientMagicData {
 
     public static void finishChannelingSuccess() {
         com.cesar.magicandsorcery.client.render.WandAnimation.onCastReleased();
+        if (channelingSpell != null && channelingSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID)) {
+            Minecraft mcInstance = Minecraft.getInstance();
+            if (mcInstance.player != null) {
+                ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketRedshaChannel(
+                        com.cesar.magicandsorcery.network.packets.PacketRedshaChannel.ACTION_CANCEL
+                ));
+            }
+        }
         isChanneling = false;
         isReadyToCast = false;
         channelTicks = 0;
@@ -222,6 +230,14 @@ public class ClientMagicData {
                 ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketFallingSwordChannel(
                         com.cesar.magicandsorcery.network.packets.PacketFallingSwordChannel.ACTION_CANCEL,
                         net.minecraft.world.phys.Vec3.ZERO
+                ));
+            }
+        }
+        if (channelingSpell != null && channelingSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID)) {
+            Minecraft mcInstance = Minecraft.getInstance();
+            if (mcInstance.player != null) {
+                ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketRedshaChannel(
+                        com.cesar.magicandsorcery.network.packets.PacketRedshaChannel.ACTION_CANCEL
                 ));
             }
         }

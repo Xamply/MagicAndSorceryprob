@@ -26,17 +26,21 @@
   "spell.magic_and_sorcery.divine_sword.desc": "Summons a giant divine sword that executes a devastating frontal sweep.",
   "spell.magic_and_sorcery.la_polla_cayendo": "La polla cayendo",
   "spell.magic_and_sorcery.la_polla_cayendo.desc": "Summons a celestial blade that transforms into a colossal sword of catastrophic impact.",
+  "spell.magic_and_sorcery.redsha": "Redsha",
+  "spell.magic_and_sorcery.redsha.desc": "Creates a 2x2 magic portal 2 blocks away. Projectile spells passing through it generate 2 additional identical copies.",
 
   "school.magic_and_sorcery.ice": "Ice",
   "school.magic_and_sorcery.lightning": "Lightning",
   "school.magic_and_sorcery.teleportation": "Teleportation",
   "school.magic_and_sorcery.holy": "Holy",
   "school.magic_and_sorcery.physical": "Physical",
+  "school.magic_and_sorcery.arcane": "Arcane",
 
   "spelltype.magic_and_sorcery.single_target": "Target",
   "spelltype.magic_and_sorcery.area": "Area",
   "spelltype.magic_and_sorcery.mobility": "Mobility",
   "spelltype.magic_and_sorcery.destruction": "Destruction",
+  "spelltype.magic_and_sorcery.utility": "Utility",
 
   "tooltip.magic_and_sorcery.catalyst_type": "Catalyst: %s",
   "tooltip.magic_and_sorcery.wand_desc": "\"Power over speed.\"",

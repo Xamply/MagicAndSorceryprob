@@ -141,6 +141,36 @@ public class ModNetwork {
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketFlashVisual::toBytes)
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketFlashVisual::handle)
                 .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketRedshaSpawn.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketRedshaSpawn::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketRedshaSpawn::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketRedshaSpawn::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketRedshaTrigger.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketRedshaTrigger::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketRedshaTrigger::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketRedshaTrigger::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketRedshaRemove.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketRedshaRemove::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketRedshaRemove::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketRedshaRemove::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketRedshaChannel.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketRedshaChannel::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketRedshaChannel::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketRedshaChannel::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketRedshaChannelState.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketRedshaChannelState::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketRedshaChannelState::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketRedshaChannelState::handle)
+                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {

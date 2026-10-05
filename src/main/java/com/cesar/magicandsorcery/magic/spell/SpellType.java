@@ -6,7 +6,8 @@ public enum SpellType {
     SINGLE_TARGET("single_target", "spelltype.magic_and_sorcery.single_target"),
     AREA("area", "spelltype.magic_and_sorcery.area"),
     MOBILITY("mobility", "spelltype.magic_and_sorcery.mobility"),
-    DESTRUCTION("destruction", "spelltype.magic_and_sorcery.destruction");
+    DESTRUCTION("destruction", "spelltype.magic_and_sorcery.destruction"),
+    UTILITY("utility", "spelltype.magic_and_sorcery.utility");
 
     private final String id;
     private final String translationKey;
