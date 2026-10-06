@@ -352,6 +352,13 @@ public class RedshaSpell extends Spell {
                 hurting.yPower = dir.y;
                 hurting.zPower = dir.z;
             }
+            if (copy instanceof Projectile copyProj && original.getOwner() != null) {
+                copyProj.setOwner(original.getOwner());
+            }
+            if (copy instanceof com.cesar.magicandsorcery.entity.IteratusMissileEntity copyMissile && original instanceof com.cesar.magicandsorcery.entity.IteratusMissileEntity origMissile) {
+                copyMissile.setDamage(origMissile.getDamage());
+                copyMissile.setOwner(origMissile.getOwner());
+            }
             copy.addTag(ECHO_TAG);
             copy.addTag(seenTag);
             if (!level.addFreshEntity(copy)) return null;

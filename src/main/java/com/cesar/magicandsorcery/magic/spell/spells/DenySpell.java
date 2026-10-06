@@ -59,30 +59,31 @@ public class DenySpell extends Spell {
         }
 
         Vec3 lookVec = player.getViewVector(1.0f).normalize();
+        Vec3 eyePos = player.getEyePosition();
+        Vec3 center = eyePos.add(lookVec.scale(1.15)).add(0, -0.2, 0);
         int barrierId = BARRIER_ID_GEN.getAndIncrement();
         ActiveBarrier barrier = new ActiveBarrier(barrierId, player.getId(), player.getUUID(),
-                serverLevel.dimension(), lookVec, DURATION_TICKS);
+                serverLevel.dimension(), center, lookVec, DURATION_TICKS);
 
         ACTIVE_BARRIERS.put(player.getUUID(), barrier);
 
         // Broadcast barrier spawn to nearby players
         ModNetwork.sendToNearby(
-                new PacketDenySpawn(player.getId(), lookVec, DURATION_TICKS),
+                new PacketDenySpawn(player.getId(), center, lookVec, DURATION_TICKS),
                 serverLevel,
-                player.position(),
+                center,
                 64.0
         );
 
         // Sound effects: crisp mirror / shield activation
-        serverLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
+        serverLevel.playSound(null, center.x, center.y, center.z,
                 SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 1.2f, 1.6f);
-        serverLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
+        serverLevel.playSound(null, center.x, center.y, center.z,
                 SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.4f, 1.4f);
-        serverLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
+        serverLevel.playSound(null, center.x, center.y, center.z,
                 SoundEvents.ILLUSIONER_PREPARE_MIRROR, SoundSource.PLAYERS, 1.0f, 1.3f);
 
         // Hand swipe particle arc in front of the caster
-        Vec3 eyePos = player.getEyePosition();
         Vec3 forward = lookVec;
         Vec3 right = forward.cross(new Vec3(0, 1, 0)).normalize();
         if (right.lengthSqr() < 1e-4) right = new Vec3(1, 0, 0);
@@ -109,16 +110,18 @@ public class DenySpell extends Spell {
         public final int playerId;
         public final UUID playerUUID;
         public final ResourceKey<Level> dimension;
+        public final Vec3 center; // Stationary position in the world
         public final Vec3 direction; // Normalized forward direction locked at cast
         public final int totalTicks;
         public int remainingTicks;
         public int ticksActive;
 
-        public ActiveBarrier(int id, int playerId, UUID playerUUID, ResourceKey<Level> dimension, Vec3 direction, int duration) {
+        public ActiveBarrier(int id, int playerId, UUID playerUUID, ResourceKey<Level> dimension, Vec3 center, Vec3 direction, int duration) {
             this.id = id;
             this.playerId = playerId;
             this.playerUUID = playerUUID;
             this.dimension = dimension;
+            this.center = center;
             this.direction = direction;
             this.totalTicks = duration;
             this.remainingTicks = duration;
@@ -126,12 +129,25 @@ public class DenySpell extends Spell {
         }
 
         /**
-         * Checks if an incoming threat position is within the protected frontal cone (~140 degrees).
+         * Checks if an incoming threat position is within the protected frontal cone of the stationary barrier.
          */
-        public boolean isThreatInProtectedArc(Vec3 threatPos, Vec3 playerPos) {
-            Vec3 toThreat = threatPos.subtract(playerPos);
+        public boolean isThreatInProtectedArc(Vec3 threatPos) {
+            Vec3 toThreat = threatPos.subtract(center);
             if (toThreat.lengthSqr() < 1e-4) return true;
-            return toThreat.normalize().dot(direction) >= 0.35;
+            return toThreat.normalize().dot(direction) >= 0.25;
+        }
+
+        /**
+         * Checks if a target position is within the protected volume behind the barrier.
+         */
+        public boolean isProtectingPosition(Vec3 targetPos) {
+            Vec3 fromBarrier = targetPos.subtract(center);
+            if (fromBarrier.lengthSqr() > 3.2 * 3.2) return false;
+            return fromBarrier.dot(direction) <= 0.45;
+        }
+
+        public boolean isThreatInProtectedArc(Vec3 threatPos, Vec3 playerPos) {
+            return isThreatInProtectedArc(threatPos) && isProtectingPosition(playerPos);
         }
     }
 
@@ -169,9 +185,9 @@ public class DenySpell extends Spell {
         }
 
         if (barrier.isThreatInProtectedArc(threatPos, player.position())) {
-            // Frontal attack successfully blocked!
+            // Frontal attack successfully blocked by stationary barrier!
             ServerLevel level = player.serverLevel();
-            Vec3 blockPos = player.getEyePosition().add(barrier.direction.scale(1.1));
+            Vec3 blockPos = barrier.center;
 
             // Visual ripple & audio
             ModNetwork.sendToNearby(new PacketDenyReflect(player.getId(), blockPos), level, blockPos, 64.0);
@@ -258,17 +274,16 @@ public class DenySpell extends Spell {
 
             ServerLevel level = player.serverLevel();
 
-            // Scan for incoming projectiles in front of the player
-            AABB scanBox = player.getBoundingBox().inflate(2.2);
+            // Scan for incoming projectiles around the stationary barrier
+            AABB scanBox = new AABB(barrier.center, barrier.center).inflate(2.4);
             for (Projectile proj : level.getEntitiesOfClass(Projectile.class, scanBox,
                     p -> p.isAlive() && p.getOwner() != player && !p.getTags().contains("deny_reflected_" + barrier.id))) {
 
-                Vec3 toProj = proj.position().subtract(player.position());
-                // Projectile is in front of the player
-                if (barrier.isThreatInProtectedArc(proj.position(), player.position())) {
-                    // Check if projectile is moving towards the player
+                // Projectile is in front of the stationary barrier
+                if (barrier.isThreatInProtectedArc(proj.position())) {
+                    // Check if projectile is moving towards the barrier
                     double velDot = proj.getDeltaMovement().dot(barrier.direction);
-                    if (velDot < 0.05) { // moving opposite to barrier direction (towards player)
+                    if (velDot < 0.05) { // moving opposite to barrier direction (towards barrier)
                         reflectProjectile(level, player, barrier, proj);
                     }
                 }

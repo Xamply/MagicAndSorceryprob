@@ -11,23 +11,29 @@ import java.util.function.Supplier;
 
 public class PacketDenySpawn {
     private final int playerId;
+    private final Vec3 center;
     private final Vec3 direction;
     private final int durationTicks;
 
-    public PacketDenySpawn(int playerId, Vec3 direction, int durationTicks) {
+    public PacketDenySpawn(int playerId, Vec3 center, Vec3 direction, int durationTicks) {
         this.playerId = playerId;
+        this.center = center;
         this.direction = direction;
         this.durationTicks = durationTicks;
     }
 
     public PacketDenySpawn(FriendlyByteBuf buf) {
         this.playerId = buf.readInt();
+        this.center = new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
         this.direction = new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
         this.durationTicks = buf.readInt();
     }
 
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeInt(this.playerId);
+        buf.writeDouble(this.center.x);
+        buf.writeDouble(this.center.y);
+        buf.writeDouble(this.center.z);
         buf.writeDouble(this.direction.x);
         buf.writeDouble(this.direction.y);
         buf.writeDouble(this.direction.z);
@@ -38,7 +44,7 @@ public class PacketDenySpawn {
         NetworkEvent.Context ctx = supplier.get();
         ctx.enqueueWork(() -> {
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                ClientDenyRenderer.spawnBarrier(playerId, direction, durationTicks);
+                ClientDenyRenderer.spawnBarrier(playerId, center, direction, durationTicks);
             });
         });
         return true;

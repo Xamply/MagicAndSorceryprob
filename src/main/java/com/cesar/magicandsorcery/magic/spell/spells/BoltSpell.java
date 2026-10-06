@@ -182,6 +182,8 @@ public class BoltSpell extends Spell {
 
     private static void strike(ServerPlayer caster, LivingEntity target, float damage, Vec3 direction, double push, double lift) {
         DamageSource magicDamage = caster.damageSources().indirectMagic(caster, caster);
+        target.invulnerableTime = 0;
+        target.hurtTime = 0;
         target.hurt(magicDamage, damage);
         target.setLastHurtByPlayer(caster);
         target.setSecondsOnFire(1);

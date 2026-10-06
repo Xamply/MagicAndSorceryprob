@@ -264,6 +264,8 @@ public class IteratusMissileEntity extends Projectile {
         // 2. Normal impact
         if (this.level() instanceof ServerLevel serverLevel && target instanceof LivingEntity living) {
             DamageSource source = this.damageSources().indirectMagic(this, this.getOwner());
+            living.invulnerableTime = 0;
+            living.hurtTime = 0;
             living.hurt(source, this.getDamage());
             if (this.getOwner() instanceof LivingEntity livingOwner) {
                 living.setLastHurtByPlayer(livingOwner instanceof Player p ? p : null);

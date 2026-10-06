@@ -25,6 +25,7 @@ public class ClientDenyRenderer {
 
     public static class ClientBarrier {
         public final int playerId;
+        public final Vec3 center;
         public final Vec3 direction;
         public final int totalTicks;
         public int remainingTicks;
@@ -32,8 +33,9 @@ public class ClientDenyRenderer {
         public int reflectTicks;
         public Vec3 lastReflectPos;
 
-        public ClientBarrier(int playerId, Vec3 direction, int duration) {
+        public ClientBarrier(int playerId, Vec3 center, Vec3 direction, int duration) {
             this.playerId = playerId;
+            this.center = center;
             this.direction = direction;
             this.totalTicks = duration;
             this.remainingTicks = duration;
@@ -45,10 +47,10 @@ public class ClientDenyRenderer {
 
     private static final List<ClientBarrier> ACTIVE_BARRIERS = new ArrayList<>();
 
-    public static void spawnBarrier(int playerId, Vec3 direction, int durationTicks) {
+    public static void spawnBarrier(int playerId, Vec3 center, Vec3 direction, int durationTicks) {
         synchronized (ACTIVE_BARRIERS) {
             ACTIVE_BARRIERS.removeIf(b -> b.playerId == playerId);
-            ACTIVE_BARRIERS.add(new ClientBarrier(playerId, direction, durationTicks));
+            ACTIVE_BARRIERS.add(new ClientBarrier(playerId, center, direction, durationTicks));
         }
     }
 
@@ -85,17 +87,13 @@ public class ClientDenyRenderer {
                     continue;
                 }
 
-                Entity e = mc.level.getEntity(barrier.playerId);
-                if (e instanceof Player p) {
-                    if (mc.level.random.nextFloat() < 0.45f) {
-                        Vec3 eye = p.getEyePosition();
-                        Vec3 center = eye.add(barrier.direction.scale(1.15)).add(0, -0.2, 0);
-                        mc.level.addParticle(ParticleTypes.ENCHANT,
-                                center.x + (Math.random() - 0.5) * 0.8,
-                                center.y + (Math.random() - 0.5) * 0.8,
-                                center.z + (Math.random() - 0.5) * 0.8,
-                                0, 0.02, 0);
-                    }
+                if (mc.level.random.nextFloat() < 0.45f) {
+                    Vec3 center = barrier.center;
+                    mc.level.addParticle(ParticleTypes.ENCHANT,
+                            center.x + (Math.random() - 0.5) * 0.8,
+                            center.y + (Math.random() - 0.5) * 0.8,
+                            center.z + (Math.random() - 0.5) * 0.8,
+                            0, 0.02, 0);
                 }
             }
         }
@@ -127,10 +125,7 @@ public class ClientDenyRenderer {
 
         synchronized (ACTIVE_BARRIERS) {
             for (ClientBarrier barrier : ACTIVE_BARRIERS) {
-                Entity e = mc.level.getEntity(barrier.playerId);
-                if (e instanceof Player player && player.isAlive()) {
-                    renderBarrier(consumer, matrix, player, barrier, partialTick);
-                }
+                renderBarrier(consumer, matrix, barrier, partialTick);
             }
         }
 
@@ -138,7 +133,7 @@ public class ClientDenyRenderer {
         poseStack.popPose();
     }
 
-    private static void renderBarrier(VertexConsumer consumer, Matrix4f matrix, Player player, ClientBarrier barrier, float partialTick) {
+    private static void renderBarrier(VertexConsumer consumer, Matrix4f matrix, ClientBarrier barrier, float partialTick) {
         float exactTicks = barrier.ticksActive + partialTick;
 
         // Smooth entrance expansion & exit fade
@@ -146,9 +141,8 @@ public class ClientDenyRenderer {
         float exitAlpha = barrier.remainingTicks < 8 ? (barrier.remainingTicks / 8.0f) : 1.0f;
         float alpha = 0.85f * exitAlpha;
 
-        // Position: floats right in front of the caster at chest/eye level
-        Vec3 eyePos = player.getEyePosition();
-        Vec3 center = eyePos.add(barrier.direction.scale(1.15)).add(0, -0.2, 0);
+        // Position: stationary in world space where the barrier was cast
+        Vec3 center = barrier.center;
 
         Vec3 forward = barrier.direction;
         Vec3 right = forward.cross(new Vec3(0, 1, 0)).normalize();
