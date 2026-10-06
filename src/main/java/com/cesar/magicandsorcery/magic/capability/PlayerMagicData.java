@@ -60,6 +60,7 @@ public class PlayerMagicData {
         preparedSpells.set(5, com.cesar.magicandsorcery.magic.spell.spells.LaPollaCayendoSpell.ID);
         preparedSpells.set(6, com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID);
         preparedSpells.set(7, com.cesar.magicandsorcery.magic.spell.spells.DenySpell.ID);
+        preparedSpells.set(8, com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID);
     }
 
     private void ensureCapacity() {
@@ -382,6 +383,14 @@ public class PlayerMagicData {
                 }
             }
             ensureCapacity();
+            if (!preparedSpells.contains(com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID)) {
+                for (int i = 0; i < MAX_SPELL_CAPACITY; i++) {
+                    if (preparedSpells.get(i) == null) {
+                        preparedSpells.set(i, com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID);
+                        break;
+                    }
+                }
+            }
         }
 
         fixSelectedSpellIndex();

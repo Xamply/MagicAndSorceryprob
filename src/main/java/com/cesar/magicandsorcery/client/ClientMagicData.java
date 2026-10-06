@@ -241,6 +241,11 @@ public class ClientMagicData {
                 ));
             }
         }
+        if (channelingSpell != null && channelingSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID)) {
+            if (isReadyToCast) {
+                ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketIteratusEnd());
+            }
+        }
 
         isChanneling = false;
         isReadyToCast = false;

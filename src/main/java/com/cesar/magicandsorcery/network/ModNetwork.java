@@ -183,6 +183,18 @@ public class ModNetwork {
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketDenyReflect::toBytes)
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketDenyReflect::handle)
                 .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketIteratusFire.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketIteratusFire::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketIteratusFire::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketIteratusFire::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketIteratusEnd.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketIteratusEnd::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketIteratusEnd::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketIteratusEnd::handle)
+                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {

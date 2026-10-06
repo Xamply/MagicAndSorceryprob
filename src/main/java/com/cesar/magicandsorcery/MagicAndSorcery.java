@@ -28,6 +28,7 @@ public class MagicAndSorcery {
         ModBlocks.register(modEventBus);
         ModCreativeModeTabs.register(modEventBus);
         com.cesar.magicandsorcery.sound.ModSounds.register(modEventBus);
+        com.cesar.magicandsorcery.entity.ModEntities.register(modEventBus);
 
         // Register lifecycle event listeners
         modEventBus.addListener(this::commonSetup);
@@ -67,6 +68,12 @@ public class MagicAndSorcery {
                             (mc, screen) -> new com.cesar.magicandsorcery.client.gui.MagicConfigScreen(screen)
                     )
             );
+        }
+
+        @SubscribeEvent
+        public static void onRegisterRenderers(net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
+            event.registerEntityRenderer(com.cesar.magicandsorcery.entity.ModEntities.ITERATUS_MISSILE.get(),
+                    com.cesar.magicandsorcery.client.render.IteratusMissileRenderer::new);
         }
     }
 }

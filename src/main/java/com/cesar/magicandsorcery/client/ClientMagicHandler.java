@@ -26,6 +26,8 @@ import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.glfw.GLFW;
 
 public class ClientMagicHandler {
+    private static int iteratusFireTimer = 0;
+    private static boolean iteratusActiveFiring = false;
 
     @Mod.EventBusSubscriber(modid = MagicAndSorcery.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ModBusEvents {
@@ -256,6 +258,8 @@ public class ClientMagicHandler {
                 if (ClientMagicData.isRadialMenuOpen()) {
                     ClientMagicData.cancelRadialMenu();
                 }
+                iteratusActiveFiring = false;
+                iteratusFireTimer = 0;
                 return;
             }
 
@@ -266,6 +270,8 @@ public class ClientMagicHandler {
                 if (ClientMagicData.isRadialMenuOpen()) {
                     ClientMagicData.cancelRadialMenu();
                 }
+                iteratusActiveFiring = false;
+                iteratusFireTimer = 0;
                 return;
             }
 
@@ -293,6 +299,8 @@ public class ClientMagicHandler {
                 if (currentSlot != ClientMagicData.getChannelingSelectedSlot() ||
                         !net.minecraft.world.item.ItemStack.matches(currentItem, ClientMagicData.getChannelingItemStack())) {
                     ClientMagicData.cancelChanneling();
+                    iteratusActiveFiring = false;
+                    iteratusFireTimer = 0;
                     mc.player.displayClientMessage(
                             Component.translatable("message.magic_and_sorcery.channeling_canceled").withStyle(ChatFormatting.RED, ChatFormatting.ITALIC),
                             true
@@ -302,6 +310,49 @@ public class ClientMagicHandler {
 
                 // Advance channel progress tick independently of movement
                 ClientMagicData.tickChanneling();
+
+                // Iteratus continuous streaming logic
+                Spell chSpell = ClientMagicData.getChannelingSpell();
+                if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID)) {
+                    if (ClientMagicData.isReadyToCast()) {
+                        boolean isCreative = mc.player.isCreative();
+                        boolean bypassMana = isCreative && com.cesar.magicandsorcery.config.ModConfigs.INFINITE_MANA_IN_CREATIVE.get();
+
+                        if (!iteratusActiveFiring) {
+                            // Initial 1.5s preparation complete! Fire missile 1 immediately!
+                            iteratusActiveFiring = true;
+                            if (!bypassMana && ClientMagicData.getMana() < 10.0f) {
+                                mc.player.displayClientMessage(
+                                        Component.translatable("message.magic_and_sorcery.not_enough_mana").withStyle(ChatFormatting.DARK_AQUA),
+                                        true
+                                );
+                                ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketIteratusEnd());
+                                ClientMagicData.cancelChanneling();
+                                iteratusActiveFiring = false;
+                                return;
+                            }
+                            ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketIteratusFire());
+                            iteratusFireTimer = 20; // 1 second (20 ticks) until next missile
+                        } else {
+                            // Continuous stream: 1 missile per second
+                            iteratusFireTimer--;
+                            if (iteratusFireTimer <= 0) {
+                                if (!bypassMana && ClientMagicData.getMana() < 10.0f) {
+                                    mc.player.displayClientMessage(
+                                            Component.translatable("message.magic_and_sorcery.not_enough_mana").withStyle(ChatFormatting.DARK_AQUA),
+                                            true
+                                    );
+                                    ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketIteratusEnd());
+                                    ClientMagicData.cancelChanneling();
+                                    iteratusActiveFiring = false;
+                                    return;
+                                }
+                                ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketIteratusFire());
+                                iteratusFireTimer = 20;
+                            }
+                        }
+                    }
+                }
 
                 // Continuous particles around player while charging
                 if (mc.player.tickCount % 2 == 0) {
@@ -359,6 +410,8 @@ public class ClientMagicHandler {
         }
 
         // Start channeling
+        iteratusActiveFiring = false;
+        iteratusFireTimer = 0;
         ClientMagicData.startChanneling(spell, method, viaKey);
 
         if (spell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.ThundajaSpell.ID) && mc.player != null && mc.level != null) {
@@ -412,6 +465,15 @@ public class ClientMagicHandler {
 
         if (ClientMagicData.isReadyToCast()) {
             Spell chSpell = ClientMagicData.getChannelingSpell();
+            if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID)) {
+                // Key released: stop continuous missile stream and start 10s cooldown
+                ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketIteratusEnd());
+                iteratusActiveFiring = false;
+                iteratusFireTimer = 0;
+                ClientMagicData.finishChannelingSuccess();
+                return;
+            }
+
             if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.LaPollaCayendoSpell.ID) && mc.player != null && mc.level != null) {
                 Vec3 finalTarget = com.cesar.magicandsorcery.magic.spell.spells.LaPollaCayendoSpell.findGroundTarget(
                         mc.level, mc.player, chSpell.getRange());
