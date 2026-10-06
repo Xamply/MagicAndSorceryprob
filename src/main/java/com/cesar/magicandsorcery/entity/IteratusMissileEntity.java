@@ -35,7 +35,7 @@ public class IteratusMissileEntity extends Projectile {
 
     private static final int MAX_LIFESPAN = 100; // 5 seconds maximum life
     private static final double BASE_SPEED = 1.15;
-    private static final double MAX_TURN_RATE = Math.toRadians(7.5); // ~7.5 degrees per tick
+    private static final double MAX_TURN_RATE = Math.toRadians(4.8); // ~4.8 degrees per tick (smooth natural curvature, not aimbot)
 
     private int lifespan = MAX_LIFESPAN;
     private int targetId = -1;
@@ -99,27 +99,10 @@ public class IteratusMissileEntity extends Projectile {
                 Vec3 curDir = vel.normalize();
                 Vec3 targetCenter = target.getBoundingBox().getCenter();
                 Vec3 toTarget = targetCenter.subtract(this.position());
-                double dist = toTarget.length();
+                Vec3 desiredDir = toTarget.normalize();
 
-                Vec3 desiredDir;
-                if (dist > 5.0) {
-                    // Straight tracking towards target
-                    desiredDir = toTarget.normalize();
-                } else {
-                    // Orbital / swirling trajectory when approaching close (inertia makes it swirl/curve around before impact)
-                    Vec3 toTargetNorm = toTarget.normalize();
-                    Vec3 orbitAxis = curDir.cross(toTargetNorm);
-                    if (orbitAxis.lengthSqr() < 1e-4) {
-                        orbitAxis = new Vec3(0, 1, 0);
-                    } else {
-                        orbitAxis = orbitAxis.normalize();
-                    }
-                    Vec3 tangent = toTargetNorm.cross(orbitAxis).normalize();
-                    // Blend inward pull with orbital swirl
-                    desiredDir = toTargetNorm.scale(0.68).add(tangent.scale(0.32)).normalize();
-                }
-
-                // Restrict turning by maximum angular rate
+                // Restrict turning by maximum angular rate:
+                // Flies straight into frontal targets without dodging, and curves smoothly towards enemies to the side
                 double dot = Math.max(-1.0, Math.min(1.0, curDir.dot(desiredDir)));
                 double angle = Math.acos(dot);
                 if (angle <= MAX_TURN_RATE) {
@@ -190,16 +173,19 @@ public class IteratusMissileEntity extends Projectile {
     }
 
     private LivingEntity resolveTarget() {
+        Vec3 curDir = this.getDeltaMovement().normalize();
         if (this.targetId != -1) {
             Entity ent = this.level().getEntity(this.targetId);
             if (ent instanceof LivingEntity living && living.isAlive() && canHitEntity(living)) {
-                return living;
+                Vec3 toT = living.getBoundingBox().getCenter().subtract(this.position());
+                if (toT.normalize().dot(curDir) >= 0.2) {
+                    return living;
+                }
             }
             this.targetId = -1;
         }
 
         // Search for nearest living entity in forward cone
-        Vec3 curDir = this.getDeltaMovement().normalize();
         AABB searchBox = this.getBoundingBox().inflate(24.0);
         LivingEntity best = null;
         double bestScore = Double.MAX_VALUE;
@@ -211,7 +197,7 @@ public class IteratusMissileEntity extends Projectile {
 
             Vec3 toCandNorm = toCand.normalize();
             double dot = toCandNorm.dot(curDir);
-            if (dot < 0.15) continue; // Must be in forward hemisphere (~81 degrees)
+            if (dot < 0.25) continue; // Forward cone (~75 degrees)
 
             // Line of sight check
             BlockHitResult clip = this.level().clip(new ClipContext(
