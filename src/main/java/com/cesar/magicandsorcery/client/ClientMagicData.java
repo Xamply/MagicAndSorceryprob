@@ -157,11 +157,6 @@ public class ClientMagicData {
         if (mc.player != null) {
             channelingSelectedSlot = mc.player.getInventory().selected;
             channelingItemStack = mc.player.getMainHandItem().copy();
-            if (mc.player.getMainHandItem().getItem() instanceof ICatalyst) {
-                mc.player.startUsingItem(net.minecraft.world.InteractionHand.MAIN_HAND);
-            } else if (mc.player.getOffhandItem().getItem() instanceof ICatalyst) {
-                mc.player.startUsingItem(net.minecraft.world.InteractionHand.OFF_HAND);
-            }
         }
     }
 

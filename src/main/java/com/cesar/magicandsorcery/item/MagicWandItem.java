@@ -44,13 +44,12 @@ public class MagicWandItem extends Item implements ICatalyst {
 
     @Override
     public int getUseDuration(ItemStack stack) {
-        return 72000;
+        return 0;
     }
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack itemstack = player.getItemInHand(hand);
-        player.startUsingItem(hand);
         return InteractionResultHolder.consume(itemstack);
     }
 

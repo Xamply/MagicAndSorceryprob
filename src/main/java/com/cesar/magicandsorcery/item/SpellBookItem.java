@@ -30,18 +30,17 @@ public class SpellBookItem extends Item implements ICatalyst {
 
     @Override
     public net.minecraft.world.item.UseAnim getUseAnimation(ItemStack stack) {
-        return net.minecraft.world.item.UseAnim.BOW;
+        return net.minecraft.world.item.UseAnim.NONE;
     }
 
     @Override
     public int getUseDuration(ItemStack stack) {
-        return 72000;
+        return 0;
     }
 
     @Override
     public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
         ItemStack itemstack = player.getItemInHand(hand);
-        player.startUsingItem(hand);
         return net.minecraft.world.InteractionResultHolder.consume(itemstack);
     }
 
