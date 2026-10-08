@@ -149,6 +149,7 @@ public class ClientMagicData {
     private static boolean channeledViaKey = false;
     private static int channelingSelectedSlot = -1;
     private static ItemStack channelingItemStack = ItemStack.EMPTY;
+    private static boolean selfCastSelected = false;
 
     public static void startChanneling(Spell spell, CastingMethod method, boolean viaKey) {
         channelingSpell = spell;
@@ -158,6 +159,7 @@ public class ClientMagicData {
         isChanneling = true;
         isReadyToCast = false;
         channeledViaKey = viaKey;
+        selfCastSelected = false;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
@@ -197,6 +199,7 @@ public class ClientMagicData {
         channelingSpell = null;
         channelingSelectedSlot = -1;
         channelingItemStack = ItemStack.EMPTY;
+        selfCastSelected = false;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null && mc.player.isUsingItem()) {
@@ -255,11 +258,24 @@ public class ClientMagicData {
         channelingSpell = null;
         channelingSelectedSlot = -1;
         channelingItemStack = ItemStack.EMPTY;
+        selfCastSelected = false;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null && mc.player.isUsingItem()) {
             mc.player.stopUsingItem();
         }
+    }
+
+    public static boolean isSelfCastSelected() {
+        return selfCastSelected;
+    }
+
+    public static void setSelfCastSelected(boolean val) {
+        selfCastSelected = val;
+    }
+
+    public static void toggleSelfCast() {
+        selfCastSelected = !selfCastSelected;
     }
 
     public static int getChannelingSelectedSlot() {

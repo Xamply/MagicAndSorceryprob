@@ -81,6 +81,12 @@ public class ClientMagicHandler {
                 if (event.getAction() == GLFW.GLFW_PRESS) {
                     if (!ClientMagicData.isChanneling() && !ClientMagicData.isRadialMenuOpen()) {
                         tryStartCasting(true);
+                    } else if (ClientMagicData.isChanneling() && !ClientMagicData.isChanneledViaKey()) {
+                        Spell sp = ClientMagicData.getChannelingSpell();
+                        if (sp != null && sp.allowsSelfCast()) {
+                            ClientMagicData.toggleSelfCast();
+                            mc.player.playSound(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.get(), 0.6f, 1.4f);
+                        }
                     }
                 } else if (event.getAction() == GLFW.GLFW_RELEASE) {
                     if (ClientMagicData.isChanneling() && ClientMagicData.isChanneledViaKey()) {
@@ -186,7 +192,27 @@ public class ClientMagicHandler {
                     if (ClientMagicData.isChanneling() && !ClientMagicData.isChanneledViaKey()) {
                         handleRelease();
                     }
+                } else if (event.getAction() == GLFW.GLFW_PRESS) {
+                    if (ClientMagicData.isChanneling() && ClientMagicData.isChanneledViaKey()) {
+                        Spell sp = ClientMagicData.getChannelingSpell();
+                        if (sp != null && sp.allowsSelfCast()) {
+                            ClientMagicData.toggleSelfCast();
+                            Minecraft mc = Minecraft.getInstance();
+                            if (mc.player != null) {
+                                mc.player.playSound(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.get(), 0.6f, 1.4f);
+                            }
+                            event.setCanceled(true);
+                        }
+                    }
                 }
+            }
+        }
+
+        @SubscribeEvent
+        public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+            if (event.getLevel().isClientSide() && ClientMagicData.isChanneling()) {
+                event.setCanceled(true);
+                event.setCancellationResult(net.minecraft.world.InteractionResult.FAIL);
             }
         }
 
@@ -372,8 +398,13 @@ public class ClientMagicHandler {
 
                 // Praesidium channeling aura on targeted ally or self
                 if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.ID)) {
-                    net.minecraft.world.entity.LivingEntity t = com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.findTarget(
-                            mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                    net.minecraft.world.entity.LivingEntity t;
+                    if (ClientMagicData.isSelfCastSelected()) {
+                        t = mc.player;
+                    } else {
+                        t = com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.findTarget(
+                                mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                    }
                     if (t != null && mc.player.tickCount % 2 == 0) {
                         double tx = t.getX() + (Math.random() - 0.5) * 0.8;
                         double ty = t.getY() + Math.random() * t.getBbHeight();
@@ -513,6 +544,7 @@ public class ClientMagicHandler {
 
             // Successfully prepared (100%)! Cast spell upon releasing key!
             // Flash sends the destination the player was shown, so they land exactly where it was marked
+            boolean selfCast = ClientMagicData.isSelfCastSelected();
             Vec3 aim = null;
             if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.ID)
                     && mc.player != null && mc.level != null) {
@@ -520,13 +552,15 @@ public class ClientMagicHandler {
                         chSpell.getRange(ClientMagicData.getChannelingMethod()));
             } else if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.ID)
                     && mc.player != null && mc.level != null) {
-                net.minecraft.world.entity.LivingEntity t = com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.findTarget(
-                        mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
-                aim = t != null ? t.position() : mc.player.position();
+                if (selfCast) {
+                    aim = mc.player.position();
+                } else {
+                    net.minecraft.world.entity.LivingEntity t = com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.findTarget(
+                            mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                    aim = t != null ? t.position() : mc.player.position();
+                }
             }
-            ModNetwork.sendToServer(aim != null
-                    ? new PacketCastSpell(aim, ClientMagicData.getSelectedSpellIndex())
-                    : new PacketCastSpell(null, ClientMagicData.getSelectedSpellIndex()));
+            ModNetwork.sendToServer(new PacketCastSpell(aim, ClientMagicData.getSelectedSpellIndex(), selfCast));
             ClientMagicData.finishChannelingSuccess();
         } else {
             // Released early (< 100%)! Cancel cast!

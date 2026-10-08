@@ -97,8 +97,34 @@ public abstract class Spell {
     }
 
     /**
+     * Whether this spell supports the in-channeling self-cast toggle mechanic
+     * (switching targeting to the caster using the alternate cast input).
+     */
+    public boolean allowsSelfCast() {
+        return false;
+    }
+
+    /**
+     * Base healing amount if this is a healing/support spell (0 if none).
+     */
+    public float getBaseHealing() {
+        return 0.0f;
+    }
+
+    public float calculateFinalHealing(CastingMethod method) {
+        if (getBaseHealing() <= 0.0f) {
+            return 0.0f;
+        }
+        return getBaseHealing() * method.getDamageMultiplier();
+    }
+
+    /**
      * Executes the spell effect on the server side.
      * @return true if the spell successfully took effect, false otherwise.
      */
     public abstract boolean execute(ServerPlayer player, Level level, CastingMethod method);
+
+    public boolean execute(ServerPlayer player, Level level, CastingMethod method, boolean selfCast) {
+        return execute(player, level, method);
+    }
 }

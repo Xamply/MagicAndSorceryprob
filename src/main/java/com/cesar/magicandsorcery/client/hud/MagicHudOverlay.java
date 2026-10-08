@@ -166,6 +166,9 @@ public class MagicHudOverlay {
             if (spell.getBaseDamage() > 0) {
                 sx = drawInline(g, font, " • ", sx, sy, maxX, MagicGui.TEXT_DIM);
                 sx = drawInline(g, font, String.format("%.0f DMG", spell.calculateFinalDamage(method)), sx, sy, maxX, MagicGui.DAMAGE);
+            } else if (spell.getBaseHealing() > 0) {
+                sx = drawInline(g, font, " • ", sx, sy, maxX, MagicGui.TEXT_DIM);
+                sx = drawInline(g, font, String.format("%.1f HP", spell.calculateFinalHealing(method)), sx, sy, maxX, 0xFFFF7A96);
             }
             if (cooldownTicks > 0) {
                 sx = drawInline(g, font, " • ", sx, sy, maxX, MagicGui.TEXT_DIM);
@@ -224,6 +227,46 @@ public class MagicHudOverlay {
 
         float runeAlpha = ready ? 0.5f : 0.1f + 0.35f * progress;
         MagicGui.runeRing(g, font, cx, cy, r + 5.0f, 12, time * 0.02f, MagicGui.alpha(accent, runeAlpha), 0.33f, 3);
+
+        // Support spell alternate self-cast hint
+        if (spell.allowsSelfCast()) {
+            boolean selfCast = ClientMagicData.isSelfCastSelected();
+            String hintText;
+            int textCol;
+            int borderCol;
+
+            if (selfCast) {
+                hintText = Component.translatable("hud.magic_and_sorcery.self_cast_active").getString();
+                textCol = 0xFFFFF2A8;
+                borderCol = 0xFFFFD700;
+            } else {
+                if (ClientMagicData.isChanneledViaKey()) {
+                    hintText = Component.translatable("hud.magic_and_sorcery.self_cast_prompt_right_click").getString();
+                } else {
+                    String keyName = com.cesar.magicandsorcery.client.KeyBindings.KEY_CAST_SPELL.getTranslatedKeyMessage().getString();
+                    hintText = Component.translatable("hud.magic_and_sorcery.self_cast_prompt_key", keyName).getString();
+                }
+                textCol = 0xFFD8E4FF;
+                borderCol = 0x804C8DFF;
+            }
+
+            float textScaledW = font.width(hintText) * 0.85f;
+            float pillW = textScaledW + 16.0f;
+            float pillH = 13.0f;
+            float px1 = cx - pillW / 2.0f;
+            float py1 = cy + 22.0f;
+            float px2 = cx + pillW / 2.0f;
+            float py2 = py1 + pillH;
+
+            MagicGui.rect(g, px1, py1, px2, py2, 0xB8050C1C);
+            MagicGui.rect(g, px1, py1, px2, py1 + 1.0f, borderCol);
+            MagicGui.rect(g, px1, py2 - 1.0f, px2, py2, borderCol);
+            MagicGui.rect(g, px1, py1, px1 + 1.0f, py2, borderCol);
+            MagicGui.rect(g, px2 - 1.0f, py1, px2, py2, borderCol);
+            g.flush();
+
+            MagicGui.centeredText(g, font, hintText, cx, py1 + 2.5f, 0.85f, textCol, true);
+        }
     }
 
     // =========================================================================
@@ -709,6 +752,8 @@ public class MagicHudOverlay {
         y = statRow(g, font, rowX, y, rowW, "⟳", MagicGui.COOLDOWN, "Recarga", String.format("%.1fs", spell.calculateFinalCooldown(method) / 20.0f), MagicGui.COOLDOWN);
         if (spell.getBaseDamage() > 0) {
             y = statRow(g, font, rowX, y, rowW, "✸", MagicGui.DAMAGE, "Daño", String.format("%.0f", spell.calculateFinalDamage(method)), MagicGui.DAMAGE);
+        } else if (spell.getBaseHealing() > 0) {
+            y = statRow(g, font, rowX, y, rowW, "♥", 0xFFFF5C7C, "Curación", String.format("%.1f", spell.calculateFinalHealing(method)), 0xFFFF7A96);
         } else {
             y = statRow(g, font, rowX, y, rowW, "➶", MagicGui.RANGE, "Alcance", String.format("%.0fm", spell.getRange(method)), MagicGui.RANGE);
         }

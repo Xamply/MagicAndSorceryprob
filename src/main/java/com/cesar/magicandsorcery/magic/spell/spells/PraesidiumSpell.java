@@ -43,25 +43,49 @@ public class PraesidiumSpell extends Spell {
     }
 
     @Override
+    public boolean allowsSelfCast() {
+        return true;
+    }
+
+    @Override
+    public float getBaseHealing() {
+        return BASE_HEAL;
+    }
+
+    @Override
     public boolean execute(ServerPlayer player, Level level, CastingMethod method) {
-        return execute(player, level, method, null);
+        return execute(player, level, method, null, false);
+    }
+
+    @Override
+    public boolean execute(ServerPlayer player, Level level, CastingMethod method, boolean selfCast) {
+        return execute(player, level, method, null, selfCast);
     }
 
     public boolean execute(ServerPlayer player, Level level, CastingMethod method, Vec3 clientTargetPos) {
+        return execute(player, level, method, clientTargetPos, false);
+    }
+
+    public boolean execute(ServerPlayer player, Level level, CastingMethod method, Vec3 clientTargetPos, boolean selfCast) {
         if (!(level instanceof ServerLevel serverLevel)) {
             return false;
         }
 
         // 1. Determine target (ally or self)
-        LivingEntity target = null;
-        if (clientTargetPos != null) {
-            target = findEntityNear(serverLevel, clientTargetPos, 2.5, player);
-        }
-        if (target == null) {
-            target = findTarget(player, serverLevel, getRange());
-        }
-        if (target == null) {
+        LivingEntity target;
+        if (selfCast) {
             target = player;
+        } else {
+            target = null;
+            if (clientTargetPos != null) {
+                target = findEntityNear(serverLevel, clientTargetPos, 2.5, player);
+            }
+            if (target == null) {
+                target = findTarget(player, serverLevel, getRange());
+            }
+            if (target == null) {
+                target = player;
+            }
         }
 
         // 2. Healing & Absorption calculation with catalyst multiplier

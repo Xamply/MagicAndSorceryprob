@@ -19,18 +19,24 @@ public class PacketCastSpell {
     /** Optional aim point computed by the caster's client (e.g. the Flash destination it previewed). */
     private final net.minecraft.world.phys.Vec3 target;
     private final int spellIndex;
+    private final boolean selfCast;
 
     public PacketCastSpell() {
-        this(null, -1);
+        this(null, -1, false);
     }
 
     public PacketCastSpell(net.minecraft.world.phys.Vec3 target) {
-        this(target, -1);
+        this(target, -1, false);
     }
 
     public PacketCastSpell(net.minecraft.world.phys.Vec3 target, int spellIndex) {
+        this(target, spellIndex, false);
+    }
+
+    public PacketCastSpell(net.minecraft.world.phys.Vec3 target, int spellIndex, boolean selfCast) {
         this.target = target;
         this.spellIndex = spellIndex;
+        this.selfCast = selfCast;
     }
 
     public PacketCastSpell(FriendlyByteBuf buf) {
@@ -38,6 +44,7 @@ public class PacketCastSpell {
                 ? new net.minecraft.world.phys.Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble())
                 : null;
         this.spellIndex = buf.readInt();
+        this.selfCast = buf.readBoolean();
     }
 
     public void toBytes(FriendlyByteBuf buf) {
@@ -48,6 +55,7 @@ public class PacketCastSpell {
             buf.writeDouble(target.z);
         }
         buf.writeInt(spellIndex);
+        buf.writeBoolean(selfCast);
     }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
@@ -104,9 +112,9 @@ public class PacketCastSpell {
                 // Execute spell
                 boolean success;
                 if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell praesidium) {
-                    success = praesidium.execute(player, player.level(), method, target);
+                    success = praesidium.execute(player, player.level(), method, target, selfCast);
                 } else {
-                    success = spell.execute(player, player.level(), method);
+                    success = spell.execute(player, player.level(), method, selfCast);
                 }
                 if (success) {
                     if (!bypassMana) {
