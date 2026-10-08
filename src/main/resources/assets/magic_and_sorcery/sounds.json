@@ -26,5 +26,15 @@
         "name": "magic_and_sorcery:sword_explosion"
       }
     ]
+  },
+  "spell.shield": {
+    "category": "player",
+    "subtitle": "subtitles.magic_and_sorcery.spell.shield",
+    "sounds": [
+      {
+        "name": "magic_and_sorcery:shield",
+        "volume": 1.0
+      }
+    ]
   }
 }

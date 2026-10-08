@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class DenySpell extends Spell {
     public static final ResourceLocation ID = new ResourceLocation(MagicAndSorcery.MODID, "deny");
 
-    public static final int DURATION_TICKS = 35; // 1.75 seconds parry/defense window
+    public static final int DURATION_TICKS = 40; // 2.0 seconds parry/defense window (+0.25s)
     private static final AtomicInteger BARRIER_ID_GEN = new AtomicInteger(1);
     private static final Map<UUID, ActiveBarrier> ACTIVE_BARRIERS = new ConcurrentHashMap<>();
 
@@ -75,13 +75,9 @@ public class DenySpell extends Spell {
                 64.0
         );
 
-        // Sound effects: crisp mirror / shield activation
+        // Sound effect: custom Deny shield sound replacing default sound combo
         serverLevel.playSound(null, center.x, center.y, center.z,
-                SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 1.2f, 1.6f);
-        serverLevel.playSound(null, center.x, center.y, center.z,
-                SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.4f, 1.4f);
-        serverLevel.playSound(null, center.x, center.y, center.z,
-                SoundEvents.ILLUSIONER_PREPARE_MIRROR, SoundSource.PLAYERS, 1.0f, 1.3f);
+                com.cesar.magicandsorcery.sound.ModSounds.SHIELD.get(), SoundSource.PLAYERS, 1.2f, 1.0f);
 
         // Hand swipe particle arc in front of the caster
         Vec3 forward = lookVec;
