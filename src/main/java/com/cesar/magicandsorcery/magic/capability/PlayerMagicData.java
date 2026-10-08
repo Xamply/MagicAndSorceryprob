@@ -391,6 +391,14 @@ public class PlayerMagicData {
                     }
                 }
             }
+            if (!preparedSpells.contains(com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.ID)) {
+                for (int i = 0; i < MAX_SPELL_CAPACITY; i++) {
+                    if (preparedSpells.get(i) == null) {
+                        preparedSpells.set(i, com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.ID);
+                        break;
+                    }
+                }
+            }
         }
 
         fixSelectedSpellIndex();

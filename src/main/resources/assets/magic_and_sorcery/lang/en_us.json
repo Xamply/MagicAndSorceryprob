@@ -30,6 +30,8 @@
   "spell.magic_and_sorcery.deny.desc": "Creates a temporary directional barrier that negates frontal attacks and reflects incoming projectiles back towards the attacker like a magic mirror.",
   "spell.magic_and_sorcery.iteratus": "Iteratus",
   "spell.magic_and_sorcery.iteratus.desc": "Channels a continuous stream of homing arcane missiles with orbital inertia while holding the cast key. Each missile consumes mana individually.",
+  "spell.magic_and_sorcery.praesidium": "Praesidium",
+  "spell.magic_and_sorcery.praesidium.desc": "Channels a protective holy spell restoring 7 health to the target (or temporary absorption hearts if at full health) while releasing a circular force wave that repels nearby enemies.",
   "entity.magic_and_sorcery.iteratus_missile": "Iteratus Missile",
   "school.magic_and_sorcery.ice": "Ice",
   "school.magic_and_sorcery.lightning": "Lightning",

@@ -36,6 +36,7 @@ public final class SpellVisuals {
         STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID, new Style(0xFFFF3344, 0xFF5C0810, "❂"));
         STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.DenySpell.ID, new Style(0xFF5CE1E6, 0xFF0E4347, "⛨"));
         STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID, new Style(0xFFB85CFF, 0xFF461066, "⚝"));
+        STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.ID, new Style(0xFFFFD700, 0xFF664D00, "✨"));
     }
 
     private SpellVisuals() {

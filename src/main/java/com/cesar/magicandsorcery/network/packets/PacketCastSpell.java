@@ -102,7 +102,12 @@ public class PacketCastSpell {
                 }
 
                 // Execute spell
-                boolean success = spell.execute(player, player.level(), method);
+                boolean success;
+                if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell praesidium) {
+                    success = praesidium.execute(player, player.level(), method, target);
+                } else {
+                    success = spell.execute(player, player.level(), method);
+                }
                 if (success) {
                     if (!bypassMana) {
                         magicData.consumeMana(finalCost);

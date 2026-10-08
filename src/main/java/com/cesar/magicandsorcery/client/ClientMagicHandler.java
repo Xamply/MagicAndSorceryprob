@@ -369,6 +369,18 @@ public class ClientMagicHandler {
                         mc.level.addParticle(ParticleTypes.ENCHANT, px, py, pz, (Math.random() - 0.5) * 0.2, 0.1, (Math.random() - 0.5) * 0.2);
                     }
                 }
+
+                // Praesidium channeling aura on targeted ally or self
+                if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.ID)) {
+                    net.minecraft.world.entity.LivingEntity t = com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.findTarget(
+                            mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                    if (t != null && mc.player.tickCount % 2 == 0) {
+                        double tx = t.getX() + (Math.random() - 0.5) * 0.8;
+                        double ty = t.getY() + Math.random() * t.getBbHeight();
+                        double tz = t.getZ() + (Math.random() - 0.5) * 0.8;
+                        mc.level.addParticle(ParticleTypes.END_ROD, tx, ty, tz, 0, 0.04, 0);
+                    }
+                }
             }
         }
     }
@@ -506,6 +518,11 @@ public class ClientMagicHandler {
                     && mc.player != null && mc.level != null) {
                 aim = com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findDestination(mc.level, mc.player,
                         chSpell.getRange(ClientMagicData.getChannelingMethod()));
+            } else if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.ID)
+                    && mc.player != null && mc.level != null) {
+                net.minecraft.world.entity.LivingEntity t = com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.findTarget(
+                        mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                aim = t != null ? t.position() : mc.player.position();
             }
             ModNetwork.sendToServer(aim != null
                     ? new PacketCastSpell(aim, ClientMagicData.getSelectedSpellIndex())

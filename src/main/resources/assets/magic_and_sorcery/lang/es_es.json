@@ -30,6 +30,8 @@
   "spell.magic_and_sorcery.deny.desc": "Crea una barrera mágica direccional temporal que niega ataques frontales y refleja proyectiles de vuelta a su lanzador como un espejo mágico.",
   "spell.magic_and_sorcery.iteratus": "Iteratus",
   "spell.magic_and_sorcery.iteratus.desc": "Canaliza un flujo continuo de misiles arcanos teledirigidos con inercia orbital mientras mantienes pulsada la tecla. Cada misil consume maná individualmente.",
+  "spell.magic_and_sorcery.praesidium": "Praesidium",
+  "spell.magic_and_sorcery.praesidium.desc": "Canaliza un hechizo de soporte sagrado que cura 7 de vida al objetivo (o vida temporal si ya está al máximo) y genera una onda de fuerza circular que repele a los enemigos cercanos.",
   "entity.magic_and_sorcery.iteratus_missile": "Misil de Iteratus",
   "school.magic_and_sorcery.ice": "Hielo",
   "school.magic_and_sorcery.lightning": "Rayo",
