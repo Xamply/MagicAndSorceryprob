@@ -16,6 +16,7 @@ public class ModSounds {
     public static final RegistryObject<SoundEvent> BLIZZARD = registerSoundEvent("spell.blizzard");
     public static final RegistryObject<SoundEvent> SWORD_EXPLOSION = registerSoundEvent("spell.sword_explosion");
     public static final RegistryObject<SoundEvent> SHIELD = registerSoundEvent("spell.shield");
+    public static final RegistryObject<SoundEvent> CURE = registerSoundEvent("spell.cure");
 
     private static RegistryObject<SoundEvent> registerSoundEvent(String name) {
         return SOUND_EVENTS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(MagicAndSorcery.MODID, name)));

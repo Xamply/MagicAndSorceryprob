@@ -186,15 +186,19 @@ public class PraesidiumSpell extends Spell {
         double z = target.getZ();
         double h = target.getBbHeight();
 
-        // Audio: celestial chime + activation hum + kinetic pulse
-        level.playSound(null, x, y, z, SoundEvents.TOTEM_USE, SoundSource.PLAYERS, 0.75f, 1.45f);
-        level.playSound(null, x, y, z, SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.85f, 1.55f);
-        level.playSound(null, x, y, z, SoundEvents.TRIDENT_RIPTIDE_1, SoundSource.PLAYERS, 0.8f, 1.3f);
+        // Audio: custom cure audio from Audios/cure.mp3
+        level.playSound(null, x, y, z, com.cesar.magicandsorcery.sound.ModSounds.CURE.get(), SoundSource.PLAYERS, 1.0f, 1.0f);
 
-        // 1. Healing burst on target
-        level.sendParticles(ParticleTypes.HEART, x, y + h + 0.35, z, 7, 0.35, 0.25, 0.35, 0.05);
-        level.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, x, y + h * 0.5, z, 30, 0.35, 0.5, 0.35, 0.35);
-        level.sendParticles(ParticleTypes.END_ROD, x, y + 0.2, z, 16, 0.25, 0.4, 0.25, 0.06);
+        // Visual FX: emerald swirling gust, light pillar, and radiant star
+        com.cesar.magicandsorcery.network.ModNetwork.sendToNearby(
+                new com.cesar.magicandsorcery.network.packets.PacketPraesidiumVisual(target.getId(), target.position(), (float) h, target.getBbWidth()),
+                level, target.position(), 64.0
+        );
+
+        // 1. Healing particles on target
+        level.sendParticles(ParticleTypes.HEART, x, y + h + 0.35, z, 6, 0.35, 0.25, 0.35, 0.05);
+        level.sendParticles(ParticleTypes.HAPPY_VILLAGER, x, y + h * 0.5, z, 20, 0.45, 0.6, 0.45, 0.08);
+        level.sendParticles(ParticleTypes.GLOW, x, y + h * 0.5, z, 15, 0.35, 0.5, 0.35, 0.05);
 
         // 2. Expanding circular force wave
         int segments = 36;

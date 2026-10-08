@@ -36,5 +36,15 @@
         "volume": 1.0
       }
     ]
+  },
+  "spell.cure": {
+    "category": "player",
+    "subtitle": "subtitles.magic_and_sorcery.spell.cure",
+    "sounds": [
+      {
+        "name": "magic_and_sorcery:cure",
+        "volume": 1.0
+      }
+    ]
   }
 }

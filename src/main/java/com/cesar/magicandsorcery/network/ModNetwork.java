@@ -195,6 +195,12 @@ public class ModNetwork {
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketIteratusEnd::toBytes)
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketIteratusEnd::handle)
                 .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketPraesidiumVisual.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketPraesidiumVisual::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketPraesidiumVisual::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketPraesidiumVisual::handle)
+                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {
