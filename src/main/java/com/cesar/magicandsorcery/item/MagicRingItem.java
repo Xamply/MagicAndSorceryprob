@@ -41,7 +41,7 @@ public class MagicRingItem extends Item implements ICatalyst {
     @Override
     public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
         ItemStack itemstack = player.getItemInHand(hand);
-        return net.minecraft.world.InteractionResultHolder.consume(itemstack);
+        return net.minecraft.world.InteractionResultHolder.pass(itemstack);
     }
 
     @Override

@@ -144,7 +144,8 @@ public final class WandAnimation {
                 -0.2f * Mth.sin(swingProcess * (float) Math.PI));
 
         // Vanilla resting hand position
-        poseStack.translate(side * 0.56f, -0.52f + equipProcess * -0.6f, -0.72f);
+        float effectiveEquip = ClientMagicData.isChanneling() ? 0.0f : equipProcess;
+        poseStack.translate(side * 0.56f, -0.52f + effectiveEquip * -0.6f, -0.72f);
 
         // Idle sway: left-to-right wobble that fades out while the staff is raised
         float idle = 1.0f - lift;

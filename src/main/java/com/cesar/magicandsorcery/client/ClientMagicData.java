@@ -73,6 +73,12 @@ public class ClientMagicData {
         return selectedSpellIndex;
     }
 
+    public static void setSelectedSpellIndex(int index) {
+        if (index >= 0 && index < preparedSpells.size() && preparedSpells.get(index) != null) {
+            selectedSpellIndex = index;
+        }
+    }
+
     public static List<ResourceLocation> getPreparedSpells() {
         while (preparedSpells.size() < 9) {
             preparedSpells.add(null);
@@ -376,7 +382,18 @@ public class ClientMagicData {
             draggedSlotIndex = -1;
             draggedSpellId = null;
 
-            if (from < 0 || from >= 9 || from == targetSlot) {
+            if (from < 0 || from >= 9) {
+                return;
+            }
+
+            if (from == targetSlot) {
+                selectedSpellIndex = targetSlot;
+                radialHoveredIndex = targetSlot;
+                Minecraft mc = Minecraft.getInstance();
+                if (mc.player != null) {
+                    mc.player.playSound(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.get(), 0.6f, 1.2f);
+                }
+                ModNetwork.sendToServer(new PacketSelectSpell(targetSlot));
                 return;
             }
 
@@ -552,6 +569,7 @@ public class ClientMagicData {
         } else {
             // Normal selection
             if (radialHoveredIndex >= 0 && radialHoveredIndex < preparedSpells.size() && preparedSpells.get(radialHoveredIndex) != null) {
+                selectedSpellIndex = radialHoveredIndex;
                 ModNetwork.sendToServer(new PacketSelectSpell(radialHoveredIndex));
             }
         }

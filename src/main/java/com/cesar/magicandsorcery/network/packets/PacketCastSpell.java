@@ -18,19 +18,26 @@ import java.util.function.Supplier;
 public class PacketCastSpell {
     /** Optional aim point computed by the caster's client (e.g. the Flash destination it previewed). */
     private final net.minecraft.world.phys.Vec3 target;
+    private final int spellIndex;
 
     public PacketCastSpell() {
-        this.target = null;
+        this(null, -1);
     }
 
     public PacketCastSpell(net.minecraft.world.phys.Vec3 target) {
+        this(target, -1);
+    }
+
+    public PacketCastSpell(net.minecraft.world.phys.Vec3 target, int spellIndex) {
         this.target = target;
+        this.spellIndex = spellIndex;
     }
 
     public PacketCastSpell(FriendlyByteBuf buf) {
         this.target = buf.readBoolean()
                 ? new net.minecraft.world.phys.Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble())
                 : null;
+        this.spellIndex = buf.readInt();
     }
 
     public void toBytes(FriendlyByteBuf buf) {
@@ -40,6 +47,7 @@ public class PacketCastSpell {
             buf.writeDouble(target.y);
             buf.writeDouble(target.z);
         }
+        buf.writeInt(spellIndex);
     }
 
     public boolean handle(Supplier<NetworkEvent.Context> supplier) {
@@ -49,6 +57,9 @@ public class PacketCastSpell {
             if (player == null) return;
 
             player.getCapability(PlayerMagicProvider.PLAYER_MAGIC).ifPresent(magicData -> {
+                if (spellIndex >= 0 && spellIndex < magicData.getSpellCapacity()) {
+                    magicData.setSelectedSpellIndex(spellIndex);
+                }
                 Spell spell = magicData.getSelectedSpell();
                 if (spell == null) {
                     player.sendSystemMessage(Component.translatable("message.magic_and_sorcery.no_spell_selected").withStyle(ChatFormatting.RED), true);

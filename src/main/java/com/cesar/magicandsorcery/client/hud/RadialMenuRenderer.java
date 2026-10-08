@@ -218,7 +218,6 @@ public class RadialMenuRenderer {
         double dy = mouseY - centerY;
         double dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < INNER_CANCEL_RADIUS) return -1;
-        if (dist > OUTER_RADIUS + 12.0) return -1;
 
         final double sectorAngle = (2.0 * Math.PI) / TOTAL_SLOTS;
         double mouseAngle = Math.atan2(dy, dx);

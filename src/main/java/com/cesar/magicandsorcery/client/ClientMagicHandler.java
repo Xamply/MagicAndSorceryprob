@@ -235,6 +235,10 @@ public class ClientMagicHandler {
                 if (!ClientMagicData.isChanneling() && !ClientMagicData.isRadialMenuOpen()) {
                     tryStartCasting(false);
                 }
+                if (ClientMagicData.isChanneling()) {
+                    event.setCanceled(true);
+                    event.setCancellationResult(net.minecraft.world.InteractionResult.PASS);
+                }
             }
         }
 
@@ -454,7 +458,7 @@ public class ClientMagicHandler {
         if (castTime <= 0) {
             // Instant spell triggers immediately on press!
             ClientMagicData.tickChanneling();
-            ModNetwork.sendToServer(new PacketCastSpell());
+            ModNetwork.sendToServer(new PacketCastSpell(null, ClientMagicData.getSelectedSpellIndex()));
             ClientMagicData.finishChannelingSuccess();
         }
     }
@@ -503,7 +507,9 @@ public class ClientMagicHandler {
                 aim = com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findDestination(mc.level, mc.player,
                         chSpell.getRange(ClientMagicData.getChannelingMethod()));
             }
-            ModNetwork.sendToServer(aim != null ? new PacketCastSpell(aim) : new PacketCastSpell());
+            ModNetwork.sendToServer(aim != null
+                    ? new PacketCastSpell(aim, ClientMagicData.getSelectedSpellIndex())
+                    : new PacketCastSpell(null, ClientMagicData.getSelectedSpellIndex()));
             ClientMagicData.finishChannelingSuccess();
         } else {
             // Released early (< 100%)! Cancel cast!

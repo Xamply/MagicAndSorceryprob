@@ -229,6 +229,7 @@ public class SpellRadialMenuScreen extends Screen {
     private void confirmSelection() {
         if (hoveredIndex >= 0 && hoveredIndex < preparedSpells.size()) {
             // User confirmed selection on a valid spell!
+            ClientMagicData.setSelectedSpellIndex(hoveredIndex);
             ModNetwork.sendToServer(new PacketSelectSpell(hoveredIndex));
         }
         // If hoveredIndex == -1, user was in center cancel zone: no change made!
