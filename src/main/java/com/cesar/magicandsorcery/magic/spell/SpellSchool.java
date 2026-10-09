@@ -9,7 +9,8 @@ public enum SpellSchool {
     TELEPORTATION("teleportation", "school.magic_and_sorcery.teleportation", ChatFormatting.LIGHT_PURPLE),
     HOLY("holy", "school.magic_and_sorcery.holy", ChatFormatting.YELLOW),
     PHYSICAL("physical", "school.magic_and_sorcery.physical", ChatFormatting.RED),
-    ARCANE("arcane", "school.magic_and_sorcery.arcane", ChatFormatting.DARK_RED);
+    ARCANE("arcane", "school.magic_and_sorcery.arcane", ChatFormatting.DARK_RED),
+    INTERFERENCE("interference", "school.magic_and_sorcery.interference", ChatFormatting.DARK_PURPLE);
 
     private final String id;
     private final String translationKey;

@@ -42,11 +42,9 @@ public class ClientMagicData {
         if (learned != null) {
             learnedSpells.addAll(learned);
         }
-        if (learnedSpells.isEmpty()) {
-            for (Spell s : ModSpells.getAllSpells()) {
-                if (!learnedSpells.contains(s.getId())) {
-                    learnedSpells.add(s.getId());
-                }
+        for (Spell s : ModSpells.getAllSpells()) {
+            if (!learnedSpells.contains(s.getId())) {
+                learnedSpells.add(s.getId());
             }
         }
         cooldowns.clear();
@@ -166,6 +164,15 @@ public class ClientMagicData {
             channelingSelectedSlot = mc.player.getInventory().selected;
             channelingItemStack = mc.player.getMainHandItem().copy();
         }
+
+        // Notify server that player started channeling
+        if (totalChannelTicks > 0) {
+            ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketSpellChannel(
+                    com.cesar.magicandsorcery.network.packets.PacketSpellChannel.ACTION_START,
+                    spell.getId(),
+                    method
+            ));
+        }
     }
 
     public static void tickChanneling() {
@@ -183,6 +190,7 @@ public class ClientMagicData {
     }
 
     public static void finishChannelingSuccess() {
+        if (!isChanneling) return;
         com.cesar.magicandsorcery.client.render.WandAnimation.onCastReleased();
         if (channelingSpell != null && channelingSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID)) {
             Minecraft mcInstance = Minecraft.getInstance();
@@ -192,6 +200,13 @@ public class ClientMagicData {
                 ));
             }
         }
+
+        ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketSpellChannel(
+                com.cesar.magicandsorcery.network.packets.PacketSpellChannel.ACTION_FINISH,
+                null,
+                null
+        ));
+
         isChanneling = false;
         isReadyToCast = false;
         channelTicks = 0;
@@ -208,6 +223,7 @@ public class ClientMagicData {
     }
 
     public static void cancelChanneling() {
+        if (!isChanneling) return;
         if (channelingSpell != null && channelingSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.ThundajaSpell.ID)) {
             Minecraft mcInstance = Minecraft.getInstance();
             if (mcInstance.player != null) {
@@ -250,6 +266,12 @@ public class ClientMagicData {
                 ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketIteratusEnd());
             }
         }
+
+        ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketSpellChannel(
+                com.cesar.magicandsorcery.network.packets.PacketSpellChannel.ACTION_CANCEL,
+                null,
+                null
+        ));
 
         isChanneling = false;
         isReadyToCast = false;

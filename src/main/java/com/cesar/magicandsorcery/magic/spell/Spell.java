@@ -119,6 +119,26 @@ public abstract class Spell {
     }
 
     /**
+     * Whether this spell can be interrupted while being channeled/cast by Disrupt.
+     * Defaults to true for all spells unless explicitly overridden.
+     */
+    public boolean isInterruptibleCast() {
+        return true;
+    }
+
+    /**
+     * Whether this spell's projectile or in-flight manifestation can be interrupted by Disrupt.
+     * Defaults to true for all spells unless explicitly overridden.
+     */
+    public boolean isInterruptibleProjectile() {
+        return true;
+    }
+
+    public boolean isInterruptible() {
+        return isInterruptibleCast();
+    }
+
+    /**
      * Executes the spell effect on the server side.
      * @return true if the spell successfully took effect, false otherwise.
      */

@@ -113,9 +113,21 @@ public class PacketCastSpell {
                 boolean success;
                 if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell praesidium) {
                     success = praesidium.execute(player, player.level(), method, target, selfCast);
+                } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell disrupt) {
+                    success = disrupt.execute(player, player.level(), method, target);
                 } else {
                     success = spell.execute(player, player.level(), method, selfCast);
                 }
+
+                // Channel finished
+                magicData.stopChanneling();
+                ModNetwork.sendToNearby(
+                        new PacketPlayerChannelState(player.getId(), null, PacketPlayerChannelState.ACTION_FINISH),
+                        player.serverLevel(),
+                        player.position(),
+                        64.0
+                );
+
                 if (success) {
                     if (!bypassMana) {
                         magicData.consumeMana(finalCost);

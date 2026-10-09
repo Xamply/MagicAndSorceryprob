@@ -34,6 +34,11 @@ public class PlayerMagicData {
     private int selectedSpellIndex;
     private final Map<ResourceLocation, Integer> cooldowns = new HashMap<>();
 
+    // Server-side active channeling tracking
+    private ResourceLocation channelingSpellId = null;
+    private CastingMethod channelingMethod = CastingMethod.BARE_HANDS;
+    private int channelingTicks = 0;
+
     public PlayerMagicData() {
         this.maxMana = DEFAULT_MAX_MANA;
         this.mana = DEFAULT_MAX_MANA;
@@ -279,10 +284,43 @@ public class PlayerMagicData {
         return cooldowns;
     }
 
+    public void startChanneling(ResourceLocation spellId, CastingMethod method) {
+        this.channelingSpellId = spellId;
+        this.channelingMethod = method != null ? method : CastingMethod.BARE_HANDS;
+        this.channelingTicks = 0;
+    }
+
+    public void stopChanneling() {
+        this.channelingSpellId = null;
+        this.channelingMethod = CastingMethod.BARE_HANDS;
+        this.channelingTicks = 0;
+    }
+
+    public boolean isChanneling() {
+        return this.channelingSpellId != null;
+    }
+
+    public ResourceLocation getChannelingSpellId() {
+        return this.channelingSpellId;
+    }
+
+    public CastingMethod getChannelingMethod() {
+        return this.channelingMethod;
+    }
+
+    public int getChannelingTicks() {
+        return this.channelingTicks;
+    }
+
     public void tickServer() {
         // Regenerate mana (manaRegen is per second, divided by 20 ticks)
         if (mana < maxMana) {
             addMana(manaRegen / 20.0f);
+        }
+
+        // Tick active channeling
+        if (channelingSpellId != null) {
+            channelingTicks++;
         }
 
         // Tick cooldowns
@@ -315,6 +353,9 @@ public class PlayerMagicData {
         ensureCapacity();
         this.cooldowns.clear();
         this.cooldowns.putAll(source.cooldowns);
+        this.channelingSpellId = source.channelingSpellId;
+        this.channelingMethod = source.channelingMethod;
+        this.channelingTicks = source.channelingTicks;
     }
 
     public void saveNBTData(CompoundTag nbt) {

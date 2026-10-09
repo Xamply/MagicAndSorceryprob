@@ -123,6 +123,7 @@ public class SpellRadialMenuScreen extends Screen {
             else if (spell.getSchool() == SpellSchool.TELEPORTATION) iconSymbol = "✨";
             else if (spell.getSchool() == SpellSchool.HOLY) iconSymbol = "⚔";
             else if (spell.getSchool() == SpellSchool.PHYSICAL) iconSymbol = "🗡";
+            else if (spell.getSchool() == SpellSchool.INTERFERENCE) iconSymbol = "⚡";
 
             guiGraphics.drawCenteredString(this.font, iconSymbol, slotX, by + 4, 0xFFFFFFFF);
 

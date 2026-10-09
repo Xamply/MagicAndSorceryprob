@@ -25,6 +25,7 @@ public class ModSpells {
     public static final com.cesar.magicandsorcery.magic.spell.spells.DenySpell DENY = register(new com.cesar.magicandsorcery.magic.spell.spells.DenySpell());
     public static final com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell ITERATUS = register(new com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell());
     public static final com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell PRAESIDIUM = register(new com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell());
+    public static final com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell DISRUPT = register(new com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell());
 
     public static <T extends Spell> T register(T spell) {
         SPELLS.put(spell.getId(), spell);

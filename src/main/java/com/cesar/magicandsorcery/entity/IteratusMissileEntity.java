@@ -22,6 +22,7 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -29,7 +30,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 
-public class IteratusMissileEntity extends Projectile {
+public class IteratusMissileEntity extends Projectile implements IInterruptibleProjectile {
     private static final EntityDataAccessor<Float> DATA_DAMAGE =
             SynchedEntityData.defineId(IteratusMissileEntity.class, EntityDataSerializers.FLOAT);
 
@@ -49,6 +50,11 @@ public class IteratusMissileEntity extends Projectile {
         this(ModEntities.ITERATUS_MISSILE.get(), level);
         this.setOwner(owner);
         this.setDamage(damage);
+    }
+
+    @Override
+    public ResourceLocation getAssociatedSpellId() {
+        return com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID;
     }
 
     @Override
@@ -221,6 +227,9 @@ public class IteratusMissileEntity extends Projectile {
 
     @Override
     protected boolean canHitEntity(Entity entity) {
+        if (this.isRemoved() || this.getTags().contains("disrupted")) {
+            return false;
+        }
         if (!entity.isAlive() || entity.isSpectator() || !entity.isPickable()) {
             return false;
         }

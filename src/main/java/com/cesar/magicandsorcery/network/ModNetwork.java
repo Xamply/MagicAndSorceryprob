@@ -201,6 +201,30 @@ public class ModNetwork {
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketPraesidiumVisual::toBytes)
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketPraesidiumVisual::handle)
                 .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketSpellChannel::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketPlayerChannelState.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketPlayerChannelState::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketPlayerChannelState::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketPlayerChannelState::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketInterruptChannel.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketInterruptChannel::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketInterruptChannel::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketInterruptChannel::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketDisruptVisual.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketDisruptVisual::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketDisruptVisual::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketDisruptVisual::handle)
+                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {

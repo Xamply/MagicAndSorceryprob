@@ -412,6 +412,24 @@ public class ClientMagicHandler {
                         mc.level.addParticle(ParticleTypes.END_ROD, tx, ty, tz, 0, 0.04, 0);
                     }
                 }
+
+                // Disrupt channeling interference energy on targeted adversary or projectile
+                if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell.ID)) {
+                    net.minecraft.world.entity.Entity dt = com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell.findDisruptTarget(
+                            mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                    if (dt != null && mc.player.tickCount % 2 == 0) {
+                        Vec3 center = dt.getBoundingBox().getCenter();
+                        double offX = (Math.random() - 0.5) * 1.4;
+                        double offY = (Math.random() - 0.5) * 1.4;
+                        double offZ = (Math.random() - 0.5) * 1.4;
+                        mc.level.addParticle(ParticleTypes.REVERSE_PORTAL,
+                                center.x + offX, center.y + offY, center.z + offZ,
+                                -offX * 0.12, -offY * 0.12, -offZ * 0.12);
+                        mc.level.addParticle(ParticleTypes.ELECTRIC_SPARK,
+                                center.x + offX * 0.4, center.y + offY * 0.4, center.z + offZ * 0.4,
+                                0, 0.03, 0);
+                    }
+                }
             }
         }
     }
@@ -559,6 +577,11 @@ public class ClientMagicHandler {
                             mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
                     aim = t != null ? t.position() : mc.player.position();
                 }
+            } else if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell.ID)
+                    && mc.player != null && mc.level != null) {
+                net.minecraft.world.entity.Entity dt = com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell.findDisruptTarget(
+                        mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                aim = dt != null ? dt.position() : null;
             }
             ModNetwork.sendToServer(new PacketCastSpell(aim, ClientMagicData.getSelectedSpellIndex(), selfCast));
             ClientMagicData.finishChannelingSuccess();
