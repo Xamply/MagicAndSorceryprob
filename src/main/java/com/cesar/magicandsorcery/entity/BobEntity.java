@@ -407,6 +407,22 @@ public class BobEntity extends PathfinderMob {
             success = praesidium.execute(fp, level, method, aimPos, selfCast);
         } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell disrupt) {
             success = disrupt.execute(fp, level, method, aimPos);
+        } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.FlashSpell flash) {
+            // Flash mobility: compute destination from Bob's gaze/target and execute
+            Vec3 dest = aimPos;
+            if (targetUuid == null) {
+                dest = com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findDestination(level, fp, flash.getRange(method));
+            }
+            if (dest != null) {
+                com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.setRequestedTarget(fp, dest);
+            }
+            success = flash.execute(fp, level, method);
+            if (success) {
+                // Teleport Bob to FakePlayer's new teleport destination
+                this.teleportTo(fp.getX(), fp.getY(), fp.getZ());
+                this.setDeltaMovement(0, 0, 0);
+                this.resetFallDistance();
+            }
         } else {
             success = spell.execute(fp, level, method);
         }

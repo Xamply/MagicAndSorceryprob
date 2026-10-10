@@ -56,7 +56,8 @@ public class DivineSwordSpell extends Spell {
         AABB sweepBox = player.getBoundingBox().inflate(6.0, 2.5, 6.0);
 
         List<LivingEntity> targets = serverLevel.getEntitiesOfClass(LivingEntity.class, sweepBox,
-                e -> e != player && e.isAlive() && !e.isSpectator());
+                e -> e != player && !(e instanceof com.cesar.magicandsorcery.entity.BobEntity bob && bob.getUUID().equals(player.getUUID()))
+                        && e.isAlive() && !e.isSpectator());
 
         int hitCount = 0;
         for (LivingEntity target : targets) {
