@@ -1,6 +1,7 @@
 package com.cesar.magicandsorcery.entity;
 
 import com.cesar.magicandsorcery.magic.catalyst.CastingMethod;
+import com.cesar.magicandsorcery.magic.catalyst.ICatalyst;
 import com.cesar.magicandsorcery.magic.spell.Spell;
 import com.cesar.magicandsorcery.magic.spell.spells.DenySpell;
 import com.cesar.magicandsorcery.magic.spell.spells.LaPollaCayendoSpell;
@@ -28,12 +29,17 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.util.FakePlayer;
@@ -165,6 +171,68 @@ public class BobEntity extends PathfinderMob {
         return channelingSpell != null ? channelingSpell.getId() : null;
     }
 
+    public CastingMethod getEffectiveCastingMethod() {
+        ItemStack held = this.getMainHandItem();
+        if (!held.isEmpty() && held.getItem() instanceof ICatalyst catalyst) {
+            return catalyst.getCastingMethod(held);
+        }
+        return CastingMethod.BARE_HANDS;
+    }
+
+    @Override
+    protected InteractionResult mobInteract(Player player, InteractionHand hand) {
+        ItemStack playerStack = player.getItemInHand(hand);
+
+        if (!playerStack.isEmpty()) {
+            // 1. Armor equipping
+            if (playerStack.getItem() instanceof ArmorItem armorItem) {
+                EquipmentSlot slot = armorItem.getEquipmentSlot();
+                ItemStack currentArmor = this.getItemBySlot(slot);
+
+                if (!this.level().isClientSide()) {
+                    ItemStack toEquip = playerStack.split(1);
+                    this.setItemSlot(slot, toEquip);
+                    if (!currentArmor.isEmpty()) {
+                        if (!player.getInventory().add(currentArmor)) {
+                            player.drop(currentArmor, false);
+                        }
+                    }
+                    this.playSound(armorItem.getEquipSound(), 1.0F, 1.0F);
+                }
+                return InteractionResult.sidedSuccess(this.level().isClientSide());
+            }
+
+            // 2. Catalyst or general item equipping into main hand
+            ItemStack currentHand = this.getMainHandItem();
+            if (!this.level().isClientSide()) {
+                ItemStack toEquip = playerStack.split(1);
+                this.setItemSlot(EquipmentSlot.MAINHAND, toEquip);
+                if (!currentHand.isEmpty()) {
+                    if (!player.getInventory().add(currentHand)) {
+                        player.drop(currentHand, false);
+                    }
+                }
+                this.playSound(SoundEvents.ARMOR_EQUIP_GENERIC, 1.0F, 1.0F);
+            }
+            return InteractionResult.sidedSuccess(this.level().isClientSide());
+        } else if (player.isShiftKeyDown()) {
+            // Sneak right-click with empty hand to unequip main hand item
+            ItemStack currentHand = this.getMainHandItem();
+            if (!currentHand.isEmpty()) {
+                if (!this.level().isClientSide()) {
+                    this.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+                    if (!player.getInventory().add(currentHand)) {
+                        player.drop(currentHand, false);
+                    }
+                    this.playSound(SoundEvents.ITEM_PICKUP, 1.0F, 1.0F);
+                }
+                return InteractionResult.sidedSuccess(this.level().isClientSide());
+            }
+        }
+
+        return super.mobInteract(player, hand);
+    }
+
     public void receiveOrder(Spell spell, ServerPlayer targetPlayer) {
         if (spell == null) return;
         this.pendingSpell = spell;
@@ -205,7 +273,8 @@ public class BobEntity extends PathfinderMob {
     }
 
     private void startCasting(Spell spell, UUID targetUuid, ServerLevel level) {
-        int castTime = spell.calculateFinalCastTime(CastingMethod.BARE_HANDS);
+        CastingMethod method = getEffectiveCastingMethod();
+        int castTime = spell.calculateFinalCastTime(method);
 
         // Turn towards target if applicable
         turnTowardsTarget(targetUuid, level);
@@ -235,8 +304,11 @@ public class BobEntity extends PathfinderMob {
 
             // Spell-specific channel start notifications
             Vec3 aimPos = resolveAimPosition(targetUuid, level, spell.getRange());
+            FakePlayer fp = getOrCreateFakePlayer(level);
+
             if (spell.getId().equals(ThundajaSpell.ID)) {
                 ThundajaSpell.setPlayerChannelTarget(this.getId(), aimPos);
+                ThundajaSpell.setPlayerChannelTarget(fp.getId(), aimPos);
                 ThundajaSpell.onChannelStart(level, this.getUUID());
                 ModNetwork.sendToNearby(
                         new PacketThundajaStormState(this.getId(), PacketThundajaChannel.ACTION_START, aimPos),
@@ -244,6 +316,7 @@ public class BobEntity extends PathfinderMob {
                 );
             } else if (spell.getId().equals(LaPollaCayendoSpell.ID)) {
                 LaPollaCayendoSpell.setPlayerChannelTarget(this.getId(), aimPos);
+                LaPollaCayendoSpell.setPlayerChannelTarget(fp.getId(), aimPos);
                 ModNetwork.sendToNearby(
                         new PacketFallingSwordChannelState(this.getId(), PacketFallingSwordChannel.ACTION_START, aimPos),
                         level, this.position(), 64.0
@@ -266,16 +339,21 @@ public class BobEntity extends PathfinderMob {
         if (!isChanneling() || !(this.level() instanceof ServerLevel sl)) return;
 
         Spell interrupted = channelingSpell;
-        int cd = interrupted != null ? interrupted.calculateFinalCooldown(CastingMethod.BARE_HANDS) : 20;
+        CastingMethod method = getEffectiveCastingMethod();
+        int cd = interrupted != null ? interrupted.calculateFinalCooldown(method) : 20;
         if (interrupted != null) {
             setCooldown(interrupted.getId(), cd);
         }
 
         // Spell-specific channel cleanup
+        FakePlayer fp = getOrCreateFakePlayer(sl);
         if (interrupted != null && interrupted.getId().equals(ThundajaSpell.ID)) {
             ThundajaSpell.onChannelEnd(sl, this.getUUID());
+            ThundajaSpell.clearPlayerChannelTarget(this.getId());
+            ThundajaSpell.clearPlayerChannelTarget(fp.getId());
         } else if (interrupted != null && interrupted.getId().equals(LaPollaCayendoSpell.ID)) {
             LaPollaCayendoSpell.clearPlayerChannelTarget(this.getId());
+            LaPollaCayendoSpell.clearPlayerChannelTarget(fp.getId());
         }
 
         channelingSpell = null;
@@ -309,17 +387,28 @@ public class BobEntity extends PathfinderMob {
         turnTowardsTarget(targetUuid, level);
         syncFakePlayer(fp);
 
-        int cd = spell.calculateFinalCooldown(CastingMethod.BARE_HANDS);
+        CastingMethod method = getEffectiveCastingMethod();
+        int cd = spell.calculateFinalCooldown(method);
         Vec3 aimPos = resolveAimPosition(targetUuid, level, spell.getRange());
+
+        // Ensure PLAYER_TARGETS has the target for FakePlayer ID as well as Bob's entity ID
+        if (spell.getId().equals(LaPollaCayendoSpell.ID)) {
+            LaPollaCayendoSpell.setPlayerChannelTarget(fp.getId(), aimPos);
+            LaPollaCayendoSpell.setPlayerChannelTarget(this.getId(), aimPos);
+        } else if (spell.getId().equals(ThundajaSpell.ID)) {
+            ThundajaSpell.setPlayerChannelTarget(fp.getId(), aimPos);
+            ThundajaSpell.setPlayerChannelTarget(this.getId(), aimPos);
+        }
+
         boolean success;
 
         if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell praesidium) {
             boolean selfCast = (targetUuid == null);
-            success = praesidium.execute(fp, level, CastingMethod.BARE_HANDS, aimPos, selfCast);
+            success = praesidium.execute(fp, level, method, aimPos, selfCast);
         } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell disrupt) {
-            success = disrupt.execute(fp, level, CastingMethod.BARE_HANDS, aimPos);
+            success = disrupt.execute(fp, level, method, aimPos);
         } else {
-            success = spell.execute(fp, level, CastingMethod.BARE_HANDS);
+            success = spell.execute(fp, level, method);
         }
 
         if (success) {
@@ -423,7 +512,10 @@ public class BobEntity extends PathfinderMob {
         Vec3 lookVec = this.getViewVector(1.0f).normalize();
         Vec3 spawnPos = eyePos.add(lookVec.scale(0.5));
 
-        IteratusMissileEntity missile = new IteratusMissileEntity(sl, this, 10.0f);
+        CastingMethod method = getEffectiveCastingMethod();
+        float damage = 10.0f * method.getDamageMultiplier();
+
+        IteratusMissileEntity missile = new IteratusMissileEntity(sl, this, damage);
         missile.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
         missile.setDeltaMovement(lookVec.scale(1.15));
         sl.addFreshEntity(missile);
@@ -455,6 +547,7 @@ public class BobEntity extends PathfinderMob {
         if (targetUuid != null) {
             ServerPlayer target = level.getServer().getPlayerList().getPlayer(targetUuid);
             if (target != null && target.isAlive()) {
+                // Return exact ground position below targeted player
                 return target.position();
             }
         }
@@ -476,6 +569,11 @@ public class BobEntity extends PathfinderMob {
         fp.yHeadRot = this.yHeadRot;
         fp.yBodyRot = this.yBodyRot;
         fp.setHealth(this.getHealth());
+
+        // Sync equipped items to FakePlayer
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            fp.setItemSlot(slot, this.getItemBySlot(slot));
+        }
     }
 
     public ServerPlayer getOwnerPlayer(ServerLevel sl) {

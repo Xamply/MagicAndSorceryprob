@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -12,9 +13,14 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 
 import java.util.Locale;
@@ -24,6 +30,17 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
 
     public BobRenderer(EntityRendererProvider.Context context) {
         super(context, new PlayerModel<>(context.bakeLayer(ModelLayers.PLAYER), false), 0.5f);
+
+        // Armor layer (supports all vanilla and modded helmets, chestplates, leggings, boots)
+        this.addLayer(new HumanoidArmorLayer<>(
+                this,
+                new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+                new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
+                context.getModelManager()
+        ));
+
+        // Held items layer (staffs/wands, books, rings, swords, shields, etc.)
+        this.addLayer(new ItemInHandLayer<>(this, context.getItemInHandRenderer()));
     }
 
     @Override
@@ -43,6 +60,19 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
     }
 
     @Override
+    protected void setupRotations(BobEntity entity, PoseStack poseStack, float ageInTicks, float rotationYaw, float partialTicks) {
+        super.setupRotations(entity, poseStack, ageInTicks, rotationYaw, partialTicks);
+
+        // Adjust arm pose if Bob is holding a wand/staff or channeling
+        ItemStack mainItem = entity.getMainHandItem();
+        if (!mainItem.isEmpty() && mainItem.getItem() instanceof com.cesar.magicandsorcery.magic.catalyst.ICatalyst) {
+            this.model.rightArmPose = HumanoidModel.ArmPose.BOW_AND_ARROW;
+        } else {
+            this.model.rightArmPose = HumanoidModel.ArmPose.EMPTY;
+        }
+    }
+
+    @Override
     protected void renderNameTag(BobEntity entity, Component displayName, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         double distSq = this.entityRenderDispatcher.distanceToSqr(entity);
         if (distSq > 4096.0D) {
@@ -59,6 +89,9 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
         float opacity = Minecraft.getInstance().options.getBackgroundOpacity(0.25F);
         int bgAlpha = (int) (opacity * 255.0F) << 24;
 
+        // Semi-transparent black 50% opacity background (0x80000000)
+        int blackFiftyPercent = 0x80000000;
+
         // --- 1. RENDER NAME TAG ("Bob") ---
         float nameX = -font.width(displayName) / 2.0F;
         font.drawInBatch(displayName, nameX, 0, 0xFFFFFFFF, false,
@@ -70,9 +103,6 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
         float barH = 7.0F;
         float halfW = barW / 2.0F;
 
-        // Health bar: Y in [-24, -17]
-        // Channeling bar: Y in [-14, -7] (if channeling)
-        // Name tag at Y = 0
         boolean isChanneling = entity.isChanneling();
 
         // --- 2. HEALTH BAR ---
@@ -83,7 +113,10 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
         float hpTop = isChanneling ? -25.0F : -16.0F;
         float hpBottom = hpTop + barH;
 
-        // Background (#252525)
+        // Black 50% backdrop behind health bar indicator
+        drawColoredQuad(poseStack, bufferSource, -halfW - 2, hpTop - 2, halfW + 2, hpBottom + 2, blackFiftyPercent);
+
+        // Inner dark border & background (#252525)
         drawColoredQuad(poseStack, bufferSource, -halfW - 1, hpTop - 1, halfW + 1, hpBottom + 1, 0xFF181818);
         drawColoredQuad(poseStack, bufferSource, -halfW, hpTop, halfW, hpBottom, 0xFF252525);
 
@@ -108,7 +141,10 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
             float channelProgress = entity.getChannelProgress();
             float chFillW = barW * channelProgress;
 
-            // Background (#252525)
+            // Black 50% backdrop behind channeling bar indicator
+            drawColoredQuad(poseStack, bufferSource, -halfW - 2, chTop - 2, halfW + 2, chBottom + 2, blackFiftyPercent);
+
+            // Inner dark border & background (#252525)
             drawColoredQuad(poseStack, bufferSource, -halfW - 1, chTop - 1, halfW + 1, chBottom + 1, 0xFF181818);
             drawColoredQuad(poseStack, bufferSource, -halfW, chTop, halfW, chBottom, 0xFF252525);
 
@@ -123,7 +159,7 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
             float chTextX = -font.width(chText) / 2.0F;
             float chTextY = chTop + (barH - 8.0F) / 2.0F + 1.0F;
             font.drawInBatch(chText, chTextX, chTextY, 0xFFFFFFFF, false,
-                    poseStack.last().pose(), bufferSource, Font.DisplayMode.NORMAL, 0, packedLight);
+                poseStack.last().pose(), bufferSource, Font.DisplayMode.NORMAL, 0, packedLight);
         }
 
         poseStack.popPose();
