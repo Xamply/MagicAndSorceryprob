@@ -35,6 +35,7 @@
   "spell.magic_and_sorcery.disrupt": "Disrupt",
   "spell.magic_and_sorcery.disrupt.desc": "Canaliza interferencia mágica durante 2s para cancelar el casteo de un adversario o destruir sus proyectiles en vuelo, forzando su tiempo de enfriamiento completo.",
   "entity.magic_and_sorcery.iteratus_missile": "Misil de Iteratus",
+  "entity.magic_and_sorcery.bob": "Bob",
   "school.magic_and_sorcery.ice": "Hielo",
   "school.magic_and_sorcery.lightning": "Rayo",
   "school.magic_and_sorcery.teleportation": "Teletransporte",

@@ -35,6 +35,7 @@
   "spell.magic_and_sorcery.disrupt": "Disrupt",
   "spell.magic_and_sorcery.disrupt.desc": "Channels a magical interference spell for 2s that cancels an opponent's channeling or neutralizes in-flight projectiles, forcing their spell into full cooldown.",
   "entity.magic_and_sorcery.iteratus_missile": "Iteratus Missile",
+  "entity.magic_and_sorcery.bob": "Bob",
   "school.magic_and_sorcery.ice": "Ice",
   "school.magic_and_sorcery.lightning": "Lightning",
   "school.magic_and_sorcery.teleportation": "Teleportation",

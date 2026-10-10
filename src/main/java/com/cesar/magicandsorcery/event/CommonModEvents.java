@@ -24,4 +24,10 @@ public class CommonModEvents {
     public static void onRegisterCapabilities(RegisterCapabilitiesEvent event) {
         event.register(PlayerMagicData.class);
     }
+
+    @SubscribeEvent
+    public static void onEntityAttributeCreation(net.minecraftforge.event.entity.EntityAttributeCreationEvent event) {
+        event.put(com.cesar.magicandsorcery.entity.ModEntities.BOB.get(),
+                com.cesar.magicandsorcery.entity.BobEntity.createAttributes().build());
+    }
 }

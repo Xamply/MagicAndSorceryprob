@@ -22,6 +22,15 @@ public class ModEntities {
                             .build(new ResourceLocation(MagicAndSorcery.MODID, "iteratus_missile").toString())
             );
 
+    public static final RegistryObject<EntityType<BobEntity>> BOB =
+            ENTITIES.register("bob", () ->
+                    EntityType.Builder.<BobEntity>of(BobEntity::new, MobCategory.MISC)
+                            .sized(0.6f, 1.8f)
+                            .clientTrackingRange(64)
+                            .updateInterval(1)
+                            .build(new ResourceLocation(MagicAndSorcery.MODID, "bob").toString())
+            );
+
     public static void register(IEventBus eventBus) {
         ENTITIES.register(eventBus);
     }

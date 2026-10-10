@@ -145,6 +145,40 @@ public class DisruptSpell extends Spell {
             return true;
         }
 
+        // 2b. Handle BobEntity channeling a spell
+        if (target instanceof com.cesar.magicandsorcery.entity.BobEntity bob) {
+            if (!bob.isChanneling()) {
+                player.sendSystemMessage(
+                        Component.translatable("message.magic_and_sorcery.disrupt.no_target")
+                                .withStyle(ChatFormatting.GRAY),
+                        true
+                );
+                return false;
+            }
+
+            Spell interruptedSpell = bob.getChannelingSpell();
+            if (interruptedSpell == null || !interruptedSpell.isInterruptibleCast()) {
+                player.sendSystemMessage(
+                        Component.translatable("message.magic_and_sorcery.disrupt.cannot_interrupt")
+                                .withStyle(ChatFormatting.RED),
+                        true
+                );
+                return false;
+            }
+
+            bob.interruptChannel(player);
+            Vec3 fxPos = bob.position().add(0, bob.getBbHeight() * 0.5, 0);
+            playRuptureEffects(serverLevel, fxPos, bob.getId(), false);
+
+            player.sendSystemMessage(
+                    Component.translatable("message.magic_and_sorcery.disrupt.success_caster",
+                            bob.getDisplayName(), interruptedSpell.getName())
+                            .withStyle(ChatFormatting.LIGHT_PURPLE),
+                    true
+            );
+            return true;
+        }
+
         // 3. Handle Case B: Vanilla Illager casting spell (Evoker, Illusioner)
         if (target instanceof SpellcasterIllager illager && illager.isCastingSpell()) {
             illager.hurt(serverLevel.damageSources().indirectMagic(player, player), 0.0f);
@@ -324,6 +358,11 @@ public class DisruptSpell extends Spell {
                         .map(PlayerMagicData::isChanneling)
                         .orElse(false);
             }
+        }
+
+        // 1b. Bob channeling
+        if (e instanceof com.cesar.magicandsorcery.entity.BobEntity bob) {
+            return bob.isChanneling();
         }
 
         // 2. Spellcaster illagers

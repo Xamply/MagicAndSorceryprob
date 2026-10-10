@@ -74,6 +74,8 @@ public class MagicAndSorcery {
         public static void onRegisterRenderers(net.minecraftforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
             event.registerEntityRenderer(com.cesar.magicandsorcery.entity.ModEntities.ITERATUS_MISSILE.get(),
                     com.cesar.magicandsorcery.client.render.IteratusMissileRenderer::new);
+            event.registerEntityRenderer(com.cesar.magicandsorcery.entity.ModEntities.BOB.get(),
+                    com.cesar.magicandsorcery.client.render.BobRenderer::new);
         }
     }
 }
