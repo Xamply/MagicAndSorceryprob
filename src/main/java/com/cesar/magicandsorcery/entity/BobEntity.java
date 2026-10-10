@@ -1,7 +1,6 @@
 package com.cesar.magicandsorcery.entity;
 
 import com.cesar.magicandsorcery.magic.catalyst.CastingMethod;
-import com.cesar.magicandsorcery.magic.spell.ModSpells;
 import com.cesar.magicandsorcery.magic.spell.Spell;
 import com.cesar.magicandsorcery.magic.spell.spells.DenySpell;
 import com.cesar.magicandsorcery.magic.spell.spells.LaPollaCayendoSpell;
@@ -14,7 +13,6 @@ import com.cesar.magicandsorcery.network.packets.PacketFallingSwordChannelState;
 import com.cesar.magicandsorcery.network.packets.PacketPlayerChannelState;
 import com.cesar.magicandsorcery.network.packets.PacketRedshaChannel;
 import com.cesar.magicandsorcery.network.packets.PacketRedshaChannelState;
-import com.cesar.magicandsorcery.network.packets.PacketSyncBobData;
 import com.cesar.magicandsorcery.network.packets.PacketThundajaChannel;
 import com.cesar.magicandsorcery.network.packets.PacketThundajaStormState;
 import com.mojang.authlib.GameProfile;
@@ -51,12 +49,14 @@ public class BobEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> DATA_OWNER_NAME =
             SynchedEntityData.defineId(BobEntity.class, EntityDataSerializers.STRING);
 
-    public static final float DEFAULT_MAX_MANA = 100.0f;
-    public static final float DEFAULT_MANA_REGEN = 2.0f; // 2.0 MP / sec
+    // Channeling synchronization for all players
+    private static final EntityDataAccessor<Boolean> DATA_CHANNELING =
+            SynchedEntityData.defineId(BobEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Integer> DATA_CHANNEL_TICKS =
+            SynchedEntityData.defineId(BobEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_TOTAL_CHANNEL_TICKS =
+            SynchedEntityData.defineId(BobEntity.class, EntityDataSerializers.INT);
 
-    private float mana = DEFAULT_MAX_MANA;
-    private float maxMana = DEFAULT_MAX_MANA;
-    private float manaRegen = DEFAULT_MANA_REGEN;
     private final Map<ResourceLocation, Integer> cooldowns = new HashMap<>();
 
     // Order & Channeling state
@@ -94,6 +94,9 @@ public class BobEntity extends PathfinderMob {
         super.defineSynchedData();
         this.entityData.define(DATA_OWNER_UUID, "");
         this.entityData.define(DATA_OWNER_NAME, "");
+        this.entityData.define(DATA_CHANNELING, false);
+        this.entityData.define(DATA_CHANNEL_TICKS, 0);
+        this.entityData.define(DATA_TOTAL_CHANNEL_TICKS, 0);
     }
 
     public void setOwner(Player player) {
@@ -117,14 +120,6 @@ public class BobEntity extends PathfinderMob {
         return this.entityData.get(DATA_OWNER_NAME);
     }
 
-    public float getMana() {
-        return mana;
-    }
-
-    public float getMaxMana() {
-        return maxMana;
-    }
-
     public boolean isSpellOnCooldown(ResourceLocation id) {
         return cooldowns.getOrDefault(id, 0) > 0;
     }
@@ -142,7 +137,24 @@ public class BobEntity extends PathfinderMob {
     }
 
     public boolean isChanneling() {
+        if (this.level().isClientSide()) {
+            return this.entityData.get(DATA_CHANNELING);
+        }
         return channelingSpell != null;
+    }
+
+    public float getChannelProgress() {
+        int total = this.level().isClientSide() ? this.entityData.get(DATA_TOTAL_CHANNEL_TICKS) : totalChannelTicks;
+        int current = this.level().isClientSide() ? this.entityData.get(DATA_CHANNEL_TICKS) : channelingTicks;
+        if (total <= 0) return 0.0f;
+        return Mth.clamp((float) current / (float) total, 0.0f, 1.0f);
+    }
+
+    public float getRemainingChannelSeconds() {
+        int total = this.level().isClientSide() ? this.entityData.get(DATA_TOTAL_CHANNEL_TICKS) : totalChannelTicks;
+        int current = this.level().isClientSide() ? this.entityData.get(DATA_CHANNEL_TICKS) : channelingTicks;
+        int remainingTicks = Math.max(0, total - current);
+        return remainingTicks / 20.0f;
     }
 
     public Spell getChannelingSpell() {
@@ -151,44 +163,6 @@ public class BobEntity extends PathfinderMob {
 
     public ResourceLocation getChannelingSpellId() {
         return channelingSpell != null ? channelingSpell.getId() : null;
-    }
-
-    public float getChannelProgress() {
-        if (!isChanneling() || totalChannelTicks <= 0) return 0.0f;
-        return Mth.clamp((float) channelingTicks / (float) totalChannelTicks, 0.0f, 1.0f);
-    }
-
-    public String getCurrentStateKey() {
-        if (isChanneling()) return "channeling";
-        if (pendingSpell != null) {
-            if (isSpellOnCooldown(pendingSpell.getId())) return "cooldown";
-            if (mana < pendingSpell.calculateFinalManaCost(CastingMethod.BARE_HANDS)) return "no_mana";
-            return "pending";
-        }
-        return "idle";
-    }
-
-    public String getCurrentSpellDisplayName() {
-        if (channelingSpell != null) return channelingSpell.getName().getString();
-        if (pendingSpell != null) return pendingSpell.getName().getString();
-        return "-";
-    }
-
-    public String getTargetDisplayName() {
-        UUID tUuid = channelingTargetUuid != null ? channelingTargetUuid : pendingTargetUuid;
-        if (tUuid != null && this.level() instanceof ServerLevel sl) {
-            ServerPlayer sp = sl.getServer().getPlayerList().getPlayer(tUuid);
-            if (sp != null) return sp.getName().getString();
-        }
-        return "Frontal";
-    }
-
-    public float getRemainingCooldownSeconds() {
-        Spell sp = channelingSpell != null ? channelingSpell : pendingSpell;
-        if (sp != null && isSpellOnCooldown(sp.getId())) {
-            return getSpellCooldown(sp.getId()) / 20.0f;
-        }
-        return 0.0f;
     }
 
     public void receiveOrder(Spell spell, ServerPlayer targetPlayer) {
@@ -211,17 +185,15 @@ public class BobEntity extends PathfinderMob {
         if (!isChanneling()) {
             evaluatePendingOrder();
         }
-        syncToOwner();
     }
 
     private void evaluatePendingOrder() {
         if (pendingSpell == null || !(this.level() instanceof ServerLevel sl)) return;
 
-        float cost = pendingSpell.calculateFinalManaCost(CastingMethod.BARE_HANDS);
+        // Infinite mana: Bob only checks cooldown!
         boolean onCd = isSpellOnCooldown(pendingSpell.getId());
-        boolean hasMana = mana >= cost;
 
-        if (!onCd && hasMana) {
+        if (!onCd) {
             // Ready to cast!
             Spell spellToCast = pendingSpell;
             UUID targetUuid = pendingTargetUuid;
@@ -249,6 +221,11 @@ public class BobEntity extends PathfinderMob {
             totalChannelTicks = castTime;
             iteratusFiring = false;
             iteratusTimer = 0;
+
+            // Sync channeling data to all clients
+            this.entityData.set(DATA_CHANNELING, true);
+            this.entityData.set(DATA_CHANNEL_TICKS, 0);
+            this.entityData.set(DATA_TOTAL_CHANNEL_TICKS, castTime);
 
             // Broadcast channel start to nearby clients
             ModNetwork.sendToNearby(
@@ -283,20 +260,21 @@ public class BobEntity extends PathfinderMob {
                 );
             }
         }
-        syncToOwner();
     }
 
     public void interruptChannel(Player interrupter) {
         if (!isChanneling() || !(this.level() instanceof ServerLevel sl)) return;
 
         Spell interrupted = channelingSpell;
-        int cd = interrupted.calculateFinalCooldown(CastingMethod.BARE_HANDS);
-        setCooldown(interrupted.getId(), cd);
+        int cd = interrupted != null ? interrupted.calculateFinalCooldown(CastingMethod.BARE_HANDS) : 20;
+        if (interrupted != null) {
+            setCooldown(interrupted.getId(), cd);
+        }
 
         // Spell-specific channel cleanup
-        if (interrupted.getId().equals(ThundajaSpell.ID)) {
+        if (interrupted != null && interrupted.getId().equals(ThundajaSpell.ID)) {
             ThundajaSpell.onChannelEnd(sl, this.getUUID());
-        } else if (interrupted.getId().equals(LaPollaCayendoSpell.ID)) {
+        } else if (interrupted != null && interrupted.getId().equals(LaPollaCayendoSpell.ID)) {
             LaPollaCayendoSpell.clearPlayerChannelTarget(this.getId());
         }
 
@@ -307,19 +285,23 @@ public class BobEntity extends PathfinderMob {
         iteratusFiring = false;
         iteratusTimer = 0;
 
+        // Clear synched data
+        this.entityData.set(DATA_CHANNELING, false);
+        this.entityData.set(DATA_CHANNEL_TICKS, 0);
+        this.entityData.set(DATA_TOTAL_CHANNEL_TICKS, 0);
+
         ModNetwork.sendToNearby(
                 new PacketPlayerChannelState(this.getId(), null, PacketPlayerChannelState.ACTION_CANCEL),
                 sl, this.position(), 64.0
         );
 
         ServerPlayer owner = getOwnerPlayer(sl);
-        if (owner != null) {
+        if (owner != null && interrupted != null) {
             owner.sendSystemMessage(
                     Component.literal("§c[Bob] ¡El casteo de " + interrupted.getName().getString() + " ha sido interrumpido por " + (interrupter != null ? interrupter.getName().getString() : "Disrupt") + "!"),
                     false
             );
         }
-        syncToOwner();
     }
 
     private void executeSpellNow(Spell spell, UUID targetUuid, ServerLevel level) {
@@ -327,9 +309,7 @@ public class BobEntity extends PathfinderMob {
         turnTowardsTarget(targetUuid, level);
         syncFakePlayer(fp);
 
-        float cost = spell.calculateFinalManaCost(CastingMethod.BARE_HANDS);
         int cd = spell.calculateFinalCooldown(CastingMethod.BARE_HANDS);
-
         Vec3 aimPos = resolveAimPosition(targetUuid, level, spell.getRange());
         boolean success;
 
@@ -343,7 +323,7 @@ public class BobEntity extends PathfinderMob {
         }
 
         if (success) {
-            mana = Math.max(0.0f, mana - cost);
+            // Infinite mana: no mana deduction, only cooldown
             setCooldown(spell.getId(), cd);
         }
 
@@ -355,12 +335,14 @@ public class BobEntity extends PathfinderMob {
         iteratusFiring = false;
         iteratusTimer = 0;
 
+        this.entityData.set(DATA_CHANNELING, false);
+        this.entityData.set(DATA_CHANNEL_TICKS, 0);
+        this.entityData.set(DATA_TOTAL_CHANNEL_TICKS, 0);
+
         ModNetwork.sendToNearby(
                 new PacketPlayerChannelState(this.getId(), null, PacketPlayerChannelState.ACTION_FINISH),
                 level, this.position(), 64.0
         );
-
-        syncToOwner();
     }
 
     @Override
@@ -370,12 +352,7 @@ public class BobEntity extends PathfinderMob {
         if (this.level().isClientSide()) return;
         if (!(this.level() instanceof ServerLevel sl)) return;
 
-        // 1. Mana Regeneration
-        if (mana < maxMana) {
-            mana = Math.min(maxMana, mana + manaRegen / 20.0f);
-        }
-
-        // 2. Tick Cooldowns
+        // 1. Tick Cooldowns
         if (!cooldowns.isEmpty()) {
             java.util.List<ResourceLocation> expired = new java.util.ArrayList<>();
             for (Map.Entry<ResourceLocation, Integer> entry : cooldowns.entrySet()) {
@@ -391,7 +368,7 @@ public class BobEntity extends PathfinderMob {
             }
         }
 
-        // 3. Handle Active Channeling
+        // 2. Handle Active Channeling
         if (channelingSpell != null) {
             turnTowardsTarget(channelingTargetUuid, sl);
 
@@ -406,7 +383,6 @@ public class BobEntity extends PathfinderMob {
             // Iteratus missile streaming
             if (channelingSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.IteratusSpell.ID)) {
                 if (channelingTicks >= totalChannelTicks) {
-                    // Ready to fire missiles!
                     if (!iteratusFiring) {
                         iteratusFiring = true;
                         fireIteratusMissile(sl);
@@ -414,13 +390,8 @@ public class BobEntity extends PathfinderMob {
                     } else {
                         iteratusTimer--;
                         if (iteratusTimer <= 0) {
-                            if (mana >= 10.0f) {
-                                fireIteratusMissile(sl);
-                                iteratusTimer = 20;
-                            } else {
-                                // Out of mana, finish Iteratus
-                                finishChannelingSuccess(sl);
-                            }
+                            fireIteratusMissile(sl);
+                            iteratusTimer = 20;
                         }
                     }
                 } else {
@@ -432,14 +403,12 @@ public class BobEntity extends PathfinderMob {
                     finishChannelingSuccess(sl);
                 }
             }
-        } else if (pendingSpell != null) {
-            // 4. Handle Pending Order
-            evaluatePendingOrder();
-        }
 
-        // 5. Periodic Sync to Owner (every 3 ticks = ~6.6 times per sec)
-        if (this.tickCount % 3 == 0) {
-            syncToOwner();
+            // Update synched ticks for clients
+            this.entityData.set(DATA_CHANNEL_TICKS, channelingTicks);
+        } else if (pendingSpell != null) {
+            // 3. Handle Pending Order
+            evaluatePendingOrder();
         }
     }
 
@@ -450,9 +419,6 @@ public class BobEntity extends PathfinderMob {
     }
 
     private void fireIteratusMissile(ServerLevel sl) {
-        if (mana < 10.0f) return;
-        mana -= 10.0f;
-
         Vec3 eyePos = this.getEyePosition();
         Vec3 lookVec = this.getViewVector(1.0f).normalize();
         Vec3 spawnPos = eyePos.add(lookVec.scale(0.5));
@@ -518,43 +484,16 @@ public class BobEntity extends PathfinderMob {
         return sl.getServer().getPlayerList().getPlayer(ownerUuid);
     }
 
-    public void syncToOwner() {
-        if (this.level() instanceof ServerLevel sl) {
-            ServerPlayer owner = getOwnerPlayer(sl);
-            if (owner != null) {
-                ModNetwork.sendToPlayer(
-                        new PacketSyncBobData(
-                                this.getId(),
-                                this.getHealth(),
-                                this.getMaxHealth(),
-                                this.mana,
-                                this.maxMana,
-                                getCurrentSpellDisplayName(),
-                                getCurrentStateKey(),
-                                getChannelProgress(),
-                                getRemainingCooldownSeconds(),
-                                getTargetDisplayName(),
-                                this.isAlive()
-                        ),
-                        owner
-                );
-            }
-        }
-    }
-
     @Override
     public boolean hurt(DamageSource source, float amount) {
         // Check if Bob has an active Deny barrier protecting frontal attacks
         if (DenySpell.hasActiveBarrier(this.fakePlayer != null ? this.fakePlayer : null)) {
-            // Deny check
             if (DenySpell.tryBlockDamage(this.fakePlayer, source, amount)) {
                 return false;
             }
         }
 
-        boolean result = super.hurt(source, amount);
-        syncToOwner();
-        return result;
+        return super.hurt(source, amount);
     }
 
     @Override
@@ -569,7 +508,6 @@ public class BobEntity extends PathfinderMob {
                 );
             }
         }
-        syncToOwner();
     }
 
     @Override
@@ -577,8 +515,6 @@ public class BobEntity extends PathfinderMob {
         super.readAdditionalSaveData(nbt);
         if (nbt.contains("OwnerUUID")) this.entityData.set(DATA_OWNER_UUID, nbt.getString("OwnerUUID"));
         if (nbt.contains("OwnerName")) this.entityData.set(DATA_OWNER_NAME, nbt.getString("OwnerName"));
-        if (nbt.contains("Mana")) this.mana = nbt.getFloat("Mana");
-        if (nbt.contains("MaxMana")) this.maxMana = nbt.getFloat("MaxMana");
     }
 
     @Override
@@ -586,7 +522,5 @@ public class BobEntity extends PathfinderMob {
         super.addAdditionalSaveData(nbt);
         nbt.putString("OwnerUUID", this.entityData.get(DATA_OWNER_UUID));
         nbt.putString("OwnerName", this.entityData.get(DATA_OWNER_NAME));
-        nbt.putFloat("Mana", this.mana);
-        nbt.putFloat("MaxMana", this.maxMana);
     }
 }

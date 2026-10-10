@@ -225,12 +225,6 @@ public class ModNetwork {
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketDisruptVisual::toBytes)
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketDisruptVisual::handle)
                 .add();
-
-        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketSyncBobData.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(com.cesar.magicandsorcery.network.packets.PacketSyncBobData::new)
-                .encoder(com.cesar.magicandsorcery.network.packets.PacketSyncBobData::toBytes)
-                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketSyncBobData::handle)
-                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {

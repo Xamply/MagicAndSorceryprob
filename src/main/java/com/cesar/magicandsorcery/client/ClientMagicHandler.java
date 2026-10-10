@@ -40,7 +40,6 @@ public class ClientMagicHandler {
         @SubscribeEvent
         public static void registerOverlays(RegisterGuiOverlaysEvent event) {
             event.registerAboveAll("magic_hud", MagicHudOverlay.HUD_MAGIC);
-            event.registerAboveAll("bob_hud", com.cesar.magicandsorcery.client.hud.BobHudOverlay.HUD_BOB);
         }
     }
 

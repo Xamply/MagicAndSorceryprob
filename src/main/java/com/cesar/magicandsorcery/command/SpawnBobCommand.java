@@ -62,7 +62,6 @@ public class SpawnBobCommand {
 
         level.addFreshEntity(bob);
         BobManager.registerBob(player.getUUID(), bob);
-        bob.syncToOwner();
 
         player.sendSystemMessage(
                 Component.literal("§a[Bob] ¡Bob ha sido invocado exitosamente! Usa el chat para ordenarle hechizos."),
