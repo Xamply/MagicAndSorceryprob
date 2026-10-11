@@ -9,8 +9,10 @@ import com.cesar.magicandsorcery.magic.spell.spells.ThundajaSpell;
 import com.cesar.magicandsorcery.network.ModNetwork;
 import com.cesar.magicandsorcery.network.packets.PacketDivineSwordChannel;
 import com.cesar.magicandsorcery.network.packets.PacketDivineSwordChannelState;
+import com.cesar.magicandsorcery.network.packets.PacketDivineSwordSweep;
 import com.cesar.magicandsorcery.network.packets.PacketFallingSwordChannel;
 import com.cesar.magicandsorcery.network.packets.PacketFallingSwordChannelState;
+import com.cesar.magicandsorcery.network.packets.PacketFlashVisual;
 import com.cesar.magicandsorcery.network.packets.PacketPlayerChannelState;
 import com.cesar.magicandsorcery.network.packets.PacketRedshaChannel;
 import com.cesar.magicandsorcery.network.packets.PacketRedshaChannelState;
@@ -354,6 +356,16 @@ public class BobEntity extends PathfinderMob {
         } else if (interrupted != null && interrupted.getId().equals(LaPollaCayendoSpell.ID)) {
             LaPollaCayendoSpell.clearPlayerChannelTarget(this.getId());
             LaPollaCayendoSpell.clearPlayerChannelTarget(fp.getId());
+        } else if (interrupted != null && interrupted.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.DivineSwordSpell.ID)) {
+            ModNetwork.sendToNearby(
+                    new PacketDivineSwordChannelState(this.getId(), PacketDivineSwordChannel.ACTION_CANCEL),
+                    sl, this.position(), 64.0
+            );
+        } else if (interrupted != null && interrupted.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.ID)) {
+            ModNetwork.sendToNearby(
+                    new PacketRedshaChannelState(this.getId(), PacketRedshaChannel.ACTION_CANCEL),
+                    sl, this.position(), 64.0
+            );
         }
 
         channelingSpell = null;
@@ -408,23 +420,72 @@ public class BobEntity extends PathfinderMob {
         } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell disrupt) {
             success = disrupt.execute(fp, level, method, aimPos);
         } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.FlashSpell flash) {
-            // Flash mobility: compute destination from Bob's gaze/target and execute
-            Vec3 dest = aimPos;
-            if (targetUuid == null) {
-                dest = com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findDestination(level, fp, flash.getRange(method));
+            // Flash mobility: compute destination from Bob's gaze / target
+            double range = flash.getRange(method);
+            Vec3 dest = null;
+            if (targetUuid != null) {
+                // If a target player or creature is specified, destination is at target's position
+                ServerPlayer targetPlayer = level.getServer().getPlayerList().getPlayer(targetUuid);
+                if (targetPlayer != null && targetPlayer.isAlive()) {
+                    dest = targetPlayer.position();
+                }
             }
-            if (dest != null) {
-                com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.setRequestedTarget(fp, dest);
+            if (dest == null) {
+                dest = com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findDestination(level, fp, range);
             }
-            success = flash.execute(fp, level, method);
-            if (success) {
-                // Teleport Bob to FakePlayer's new teleport destination
-                this.teleportTo(fp.getX(), fp.getY(), fp.getZ());
-                this.setDeltaMovement(0, 0, 0);
-                this.resetFallDistance();
+            // Fallback: if findDestination returned null due to collision quirks, snap forward on ground
+            if (dest == null) {
+                Vec3 look = this.getViewVector(1.0f);
+                Vec3 forwardSpot = this.position().add(look.x * Math.min(range, 6.0), 0, look.z * Math.min(range, 6.0));
+                dest = com.cesar.magicandsorcery.magic.spell.SpellTargeting.dropToGround(level, forwardSpot.add(0, 1.0, 0), fp, net.minecraft.world.level.ClipContext.Fluid.NONE);
+                if (dest == null) {
+                    dest = forwardSpot;
+                }
             }
+
+            Vec3 origin = this.position();
+            float height = this.getBbHeight();
+            net.minecraft.world.entity.LivingEntity swap = com.cesar.magicandsorcery.magic.spell.spells.FlashSpell.findSwapTarget(level, fp, dest);
+
+            // Broadcast visual blink using Bob's ID
+            ModNetwork.sendToNearby(new PacketFlashVisual(this.getId(), origin, dest, height, level.getRandom().nextLong()),
+                    level, origin.lerp(dest, 0.5), 80.0);
+
+            // Departure effects
+            if (swap == null) {
+                com.cesar.magicandsorcery.magic.spell.SpellImpacts.shockwave(level, origin, 3.0, -0.35, 0.12, this);
+            }
+            level.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ILLUSIONER_MIRROR_MOVE, SoundSource.PLAYERS, 1.2f, 1.3f);
+            level.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.5f, 1.6f);
+
+            // Teleport Bob to destination
+            this.teleportTo(dest.x, dest.y, dest.z);
+            this.setDeltaMovement(0, 0, 0);
+            this.resetFallDistance();
+
+            if (swap != null) {
+                ModNetwork.sendToNearby(new PacketFlashVisual(swap.getId(), swap.position(), origin, swap.getBbHeight(),
+                        level.getRandom().nextLong()), level, origin.lerp(dest, 0.5), 80.0);
+                swap.teleportTo(origin.x, origin.y, origin.z);
+                swap.resetFallDistance();
+                level.playSound(null, origin.x, origin.y, origin.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8f, 0.8f);
+            } else {
+                com.cesar.magicandsorcery.magic.spell.SpellImpacts.shockwave(level, dest, 3.5, 0.6, 0.3, this);
+            }
+            level.playSound(null, dest.x, dest.y, dest.z, SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 1.4f, 1.5f);
+            level.playSound(null, dest.x, dest.y, dest.z, SoundEvents.EVOKER_CAST_SPELL, SoundSource.PLAYERS, 0.9f, 1.7f);
+
+            success = true;
         } else {
             success = spell.execute(fp, level, method);
+
+            // If spell was Divine Sword, ensure sweep packet is also broadcast with Bob's ID to clean up Bob's sword renderer
+            if (spell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.DivineSwordSpell.ID)) {
+                ModNetwork.sendToNearby(
+                        new PacketDivineSwordSweep(this.getId(), this.getYRot(), this.getXRot(), this.position()),
+                        level, this.position(), 64.0
+                );
+            }
         }
 
         if (success) {
