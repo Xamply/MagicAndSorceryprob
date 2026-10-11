@@ -108,7 +108,10 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
         // --- 2. HEALTH BAR ---
         float health = entity.getHealth();
         float maxHealth = entity.getMaxHealth();
-        float healthPct = Math.max(0.0F, Math.min(1.0F, health / Math.max(1.0F, maxHealth)));
+        float absorption = entity.getAbsorptionAmount();
+        float totalEffective = Math.max(maxHealth, health + absorption);
+        float healthPct = Math.max(0.0F, Math.min(1.0F, health / Math.max(1.0F, totalEffective)));
+        float absPct = Math.max(0.0F, Math.min(1.0F, absorption / Math.max(1.0F, totalEffective)));
 
         float hpTop = isChanneling ? -25.0F : -16.0F;
         float hpBottom = hpTop + barH;
@@ -126,8 +129,21 @@ public class BobRenderer extends LivingEntityRenderer<BobEntity, PlayerModel<Bob
             drawColoredQuad(poseStack, bufferSource, -halfW, hpTop, -halfW + hpFillW, hpBottom, 0xFFD93636);
         }
 
-        // Text: "current/max" (e.g. "20/20")
-        String hpText = String.format(Locale.ROOT, "%d/%d", Math.round(health), Math.round(maxHealth));
+        // Filled Gold/Yellow Absorption Bar (#E5B800)
+        float absFillW = barW * absPct;
+        if (absFillW > 0.0F) {
+            float absStart = -halfW + hpFillW;
+            float absEnd = Math.min(halfW, absStart + absFillW);
+            drawColoredQuad(poseStack, bufferSource, absStart, hpTop, absEnd, hpBottom, 0xFFE5B800);
+        }
+
+        // Text: "current/max" or "current(+abs)/max"
+        String hpText;
+        if (absorption > 0.0F) {
+            hpText = String.format(Locale.ROOT, "%d(+%d)/%d", Math.round(health), Math.round(absorption), Math.round(maxHealth));
+        } else {
+            hpText = String.format(Locale.ROOT, "%d/%d", Math.round(health), Math.round(maxHealth));
+        }
         float hpTextX = -font.width(hpText) / 2.0F;
         float hpTextY = hpTop + (barH - 8.0F) / 2.0F + 1.0F;
         font.drawInBatch(hpText, hpTextX, hpTextY, 0xFFFFFFFF, false,

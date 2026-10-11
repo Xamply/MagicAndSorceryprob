@@ -414,9 +414,19 @@ public class BobEntity extends PathfinderMob {
 
         boolean success;
 
-        if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell praesidium) {
-            boolean selfCast = (targetUuid == null);
-            success = praesidium.execute(fp, level, method, aimPos, selfCast);
+        if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell) {
+            net.minecraft.world.entity.LivingEntity targetEntity = this;
+            if (targetUuid != null) {
+                ServerPlayer targetPlayer = level.getServer().getPlayerList().getPlayer(targetUuid);
+                if (targetPlayer != null && targetPlayer.isAlive()) {
+                    targetEntity = targetPlayer;
+                }
+            }
+            float healAmount = com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.BASE_HEAL * method.getDamageMultiplier();
+            com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.applyHealingAndAbsorption(targetEntity, healAmount);
+            com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.applyRepulsionWave(level, fp, targetEntity, com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.WAVE_RADIUS);
+            com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.playEffects(level, targetEntity);
+            success = true;
         } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell disrupt) {
             success = disrupt.execute(fp, level, method, aimPos);
         } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.FlashSpell flash) {
