@@ -413,6 +413,23 @@ public class ClientMagicHandler {
                     }
                 }
 
+                // Poltergeist channeling spectral energy on targeted ally or self
+                if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.ID)) {
+                    net.minecraft.world.entity.LivingEntity t;
+                    if (ClientMagicData.isSelfCastSelected()) {
+                        t = mc.player;
+                    } else {
+                        t = com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.findTarget(
+                                mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                    }
+                    if (t != null && mc.player.tickCount % 2 == 0) {
+                        double tx = t.getX() + (Math.random() - 0.5) * 0.8;
+                        double ty = t.getY() + Math.random() * t.getBbHeight();
+                        double tz = t.getZ() + (Math.random() - 0.5) * 0.8;
+                        mc.level.addParticle(ParticleTypes.SOUL, tx, ty, tz, 0, 0.03, 0);
+                    }
+                }
+
                 // Disrupt channeling interference energy on targeted adversary or projectile
                 if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell.ID)) {
                     net.minecraft.world.entity.Entity dt = com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell.findDisruptTarget(
@@ -574,6 +591,15 @@ public class ClientMagicHandler {
                     aim = mc.player.position();
                 } else {
                     net.minecraft.world.entity.LivingEntity t = com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.findTarget(
+                            mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
+                    aim = t != null ? t.position() : mc.player.position();
+                }
+            } else if (chSpell != null && chSpell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.ID)
+                    && mc.player != null && mc.level != null) {
+                if (selfCast) {
+                    aim = mc.player.position();
+                } else {
+                    net.minecraft.world.entity.LivingEntity t = com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.findTarget(
                             mc.player, mc.level, chSpell.getRange(ClientMagicData.getChannelingMethod()));
                     aim = t != null ? t.position() : mc.player.position();
                 }

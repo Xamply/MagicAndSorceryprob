@@ -9,6 +9,7 @@ import com.cesar.magicandsorcery.network.packets.PacketSyncMagicData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
@@ -94,11 +95,20 @@ public class PlayerMagicEvents {
     }
 
     @SubscribeEvent
+    public static void onLivingDamage(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
+        LivingEntity victim = event.getEntity();
+        if (victim != null && !victim.level().isClientSide()) {
+            com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.onEntityDamaged(victim, event.getSource(), event.getAmount());
+        }
+    }
+
+    @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             BlizzardSpell.tickActiveZones();
             com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.tickServer(event.getServer());
             com.cesar.magicandsorcery.magic.spell.spells.DenySpell.tickServer(event.getServer());
+            com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.tickServer(event.getServer());
         }
     }
 }

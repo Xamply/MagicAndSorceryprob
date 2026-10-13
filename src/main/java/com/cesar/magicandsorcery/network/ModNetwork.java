@@ -202,6 +202,18 @@ public class ModNetwork {
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketPraesidiumVisual::handle)
                 .add();
 
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketPoltergeistApplied.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketPoltergeistApplied::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketPoltergeistApplied::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketPoltergeistApplied::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketPoltergeistStrike.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketPoltergeistStrike::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketPoltergeistStrike::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketPoltergeistStrike::handle)
+                .add();
+
         INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel.class, id(), NetworkDirection.PLAY_TO_SERVER)
                 .decoder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel::new)
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel::toBytes)

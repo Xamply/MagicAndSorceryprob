@@ -113,6 +113,8 @@ public class PacketCastSpell {
                 boolean success;
                 if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell praesidium) {
                     success = praesidium.execute(player, player.level(), method, target, selfCast);
+                } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell poltergeist) {
+                    success = poltergeist.execute(player, player.level(), method, target, selfCast);
                 } else if (spell instanceof com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell disrupt) {
                     success = disrupt.execute(player, player.level(), method, target);
                 } else {
