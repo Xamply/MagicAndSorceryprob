@@ -11,7 +11,8 @@ public enum SpellSchool {
     PHYSICAL("physical", "school.magic_and_sorcery.physical", ChatFormatting.RED),
     ARCANE("arcane", "school.magic_and_sorcery.arcane", ChatFormatting.DARK_RED),
     INTERFERENCE("interference", "school.magic_and_sorcery.interference", ChatFormatting.DARK_PURPLE),
-    ENCHANTMENT("enchantment", "school.magic_and_sorcery.enchantment", ChatFormatting.DARK_AQUA);
+    ENCHANTMENT("enchantment", "school.magic_and_sorcery.enchantment", ChatFormatting.DARK_AQUA),
+    CONJURATION("conjuration", "school.magic_and_sorcery.conjuration", ChatFormatting.DARK_RED);
 
     private final String id;
     private final String translationKey;

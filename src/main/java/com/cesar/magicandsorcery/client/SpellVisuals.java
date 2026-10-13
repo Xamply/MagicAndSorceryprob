@@ -39,6 +39,7 @@ public final class SpellVisuals {
         STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.PraesidiumSpell.ID, new Style(0xFFFFD700, 0xFF664D00, "✨"));
         STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.DisruptSpell.ID, new Style(0xFFBF55EC, 0xFF4A154B, "⚡"));
         STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.ID, new Style(0xFF1ABC9C, 0xFF0E6251, "👻"));
+        STYLES.put(com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.ID, new Style(0xFFD4AF37, 0xFF3E3218, "⚔"));
     }
 
     private SpellVisuals() {

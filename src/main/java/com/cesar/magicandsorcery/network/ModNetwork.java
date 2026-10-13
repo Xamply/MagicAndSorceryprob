@@ -214,6 +214,18 @@ public class ModNetwork {
                 .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketPoltergeistStrike::handle)
                 .add();
 
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketClaymoreSwingVisual.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketClaymoreSwingVisual::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketClaymoreSwingVisual::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketClaymoreSwingVisual::handle)
+                .add();
+
+        INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest::new)
+                .encoder(com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest::toBytes)
+                .consumerMainThread(com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest::handle)
+                .add();
+
         INSTANCE.messageBuilder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel.class, id(), NetworkDirection.PLAY_TO_SERVER)
                 .decoder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel::new)
                 .encoder(com.cesar.magicandsorcery.network.packets.PacketSpellChannel::toBytes)

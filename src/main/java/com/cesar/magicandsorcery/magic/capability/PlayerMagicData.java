@@ -440,6 +440,22 @@ public class PlayerMagicData {
                     }
                 }
             }
+            if (!preparedSpells.contains(com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.ID)) {
+                for (int i = 0; i < MAX_SPELL_CAPACITY; i++) {
+                    if (preparedSpells.get(i) == null) {
+                        preparedSpells.set(i, com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.ID);
+                        break;
+                    }
+                }
+            }
+            if (!preparedSpells.contains(com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.ID)) {
+                for (int i = 0; i < MAX_SPELL_CAPACITY; i++) {
+                    if (preparedSpells.get(i) == null) {
+                        preparedSpells.set(i, com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.ID);
+                        break;
+                    }
+                }
+            }
         }
 
         fixSelectedSpellIndex();

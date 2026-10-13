@@ -187,6 +187,16 @@ public class ClientMagicHandler {
                 return;
             }
 
+            Minecraft mc = Minecraft.getInstance();
+
+            if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.getAction() == GLFW.GLFW_PRESS && mc.screen == null) {
+                if (mc.player != null && mc.player.getMainHandItem().getItem() instanceof com.cesar.magicandsorcery.item.ClaymoreItem) {
+                    ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest());
+                    event.setCanceled(true);
+                    return;
+                }
+            }
+
             if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
                 if (event.getAction() == GLFW.GLFW_RELEASE) {
                     if (ClientMagicData.isChanneling() && !ClientMagicData.isChanneledViaKey()) {
@@ -197,7 +207,6 @@ public class ClientMagicHandler {
                         Spell sp = ClientMagicData.getChannelingSpell();
                         if (sp != null && sp.allowsSelfCast()) {
                             ClientMagicData.toggleSelfCast();
-                            Minecraft mc = Minecraft.getInstance();
                             if (mc.player != null) {
                                 mc.player.playSound(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.get(), 0.6f, 1.4f);
                             }
@@ -205,6 +214,20 @@ public class ClientMagicHandler {
                         }
                     }
                 }
+            }
+        }
+
+        @SubscribeEvent
+        public static void onLeftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
+            if (event.getEntity().getMainHandItem().getItem() instanceof com.cesar.magicandsorcery.item.ClaymoreItem) {
+                event.setCanceled(true);
+            }
+        }
+
+        @SubscribeEvent
+        public static void onLeftClickEmpty(PlayerInteractEvent.LeftClickEmpty event) {
+            if (event.getEntity().getMainHandItem().getItem() instanceof com.cesar.magicandsorcery.item.ClaymoreItem) {
+                ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest());
             }
         }
 

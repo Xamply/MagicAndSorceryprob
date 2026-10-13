@@ -27,6 +27,9 @@ public class ModItems {
     public static final RegistryObject<ManaPotionItem> MANA_POTION = ITEMS.register("mana_potion",
             ManaPotionItem::new);
 
+    public static final RegistryObject<ClaymoreItem> CLAYMORE = ITEMS.register("claymore",
+            ClaymoreItem::new);
+
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);
     }

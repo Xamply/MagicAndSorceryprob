@@ -125,6 +125,7 @@ public class SpellRadialMenuScreen extends Screen {
             else if (spell.getSchool() == SpellSchool.PHYSICAL) iconSymbol = "🗡";
             else if (spell.getSchool() == SpellSchool.INTERFERENCE) iconSymbol = "⚡";
             else if (spell.getSchool() == SpellSchool.ENCHANTMENT) iconSymbol = "👻";
+            else if (spell.getSchool() == SpellSchool.CONJURATION) iconSymbol = "⚔";
 
             guiGraphics.drawCenteredString(this.font, iconSymbol, slotX, by + 4, 0xFFFFFFFF);
 

@@ -495,6 +495,17 @@ public class BobEntity extends PathfinderMob {
             level.playSound(null, dest.x, dest.y, dest.z, SoundEvents.EVOKER_CAST_SPELL, SoundSource.PLAYERS, 0.9f, 1.7f);
 
             success = true;
+        } else if (spell.getId().equals(com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.ID)) {
+            this.setItemSlot(EquipmentSlot.MAINHAND, com.cesar.magicandsorcery.item.ClaymoreItem.createSummonedClaymore());
+            success = true;
+            level.playSound(null, this.getX(), this.getY() + 1.0, this.getZ(),
+                    SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 1.4f, 0.9f);
+            level.playSound(null, this.getX(), this.getY() + 1.0, this.getZ(),
+                    SoundEvents.ANVIL_USE, SoundSource.PLAYERS, 1.0f, 1.6f);
+            if (this.level() instanceof ServerLevel sl) {
+                sl.sendParticles(ParticleTypes.CRIT, this.getX(), this.getY() + 1.0, this.getZ(),
+                        25, 0.5, 0.6, 0.5, 0.15);
+            }
         } else {
             success = spell.execute(fp, level, method);
 

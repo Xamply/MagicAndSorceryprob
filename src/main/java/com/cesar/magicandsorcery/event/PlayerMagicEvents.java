@@ -1,6 +1,7 @@
 package com.cesar.magicandsorcery.event;
 
 import com.cesar.magicandsorcery.MagicAndSorcery;
+import com.cesar.magicandsorcery.item.ClaymoreItem;
 import com.cesar.magicandsorcery.magic.capability.PlayerMagicData;
 import com.cesar.magicandsorcery.magic.capability.PlayerMagicProvider;
 import com.cesar.magicandsorcery.magic.spell.spells.BlizzardSpell;
@@ -95,6 +96,14 @@ public class PlayerMagicEvents {
     }
 
     @SubscribeEvent
+    public static void onPlayerAttackEntity(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
+        // Claymore does NOT use default Minecraft attack hits; it uses its special combo sequence
+        if (event.getEntity().getMainHandItem().getItem() instanceof ClaymoreItem) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
     public static void onLivingDamage(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
         LivingEntity victim = event.getEntity();
         if (victim != null && !victim.level().isClientSide()) {
@@ -109,6 +118,7 @@ public class PlayerMagicEvents {
             com.cesar.magicandsorcery.magic.spell.spells.RedshaSpell.tickServer(event.getServer());
             com.cesar.magicandsorcery.magic.spell.spells.DenySpell.tickServer(event.getServer());
             com.cesar.magicandsorcery.magic.spell.spells.PoltergeistSpell.tickServer(event.getServer());
+            com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.tickServer(event.getServer());
         }
     }
 }
