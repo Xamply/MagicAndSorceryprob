@@ -56,7 +56,7 @@ public class ClaymoreItem extends Item {
             ticksLeft--;
             tag.putInt(TAG_TICKS_LEFT, ticksLeft);
 
-            if (ticksLeft <= 0 || hitsLeft <= 0) {
+            if (ticksLeft <= 0 || (hitsLeft <= 0 && !com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.isFinisherPlaying(player.getUUID()))) {
                 // Time up or hits exhausted: dissolve Claymore with magic particles
                 player.getInventory().setItem(slotId, ItemStack.EMPTY);
                 if (level instanceof ServerLevel sl) {

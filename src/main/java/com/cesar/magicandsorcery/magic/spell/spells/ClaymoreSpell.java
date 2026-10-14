@@ -20,7 +20,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -43,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Combo sequence:
  * - Swing 1: 10 base damage, wide sweep right-to-left
  * - Swing 2: 10 base damage, wide sweep left-to-right
- * - Swing 3: 15 base damage, deep forward thrust
+ * - Swing 3: 15 base damage, deep forward thrust + 5-phase finisher sequence
  */
 public class ClaymoreSpell extends Spell {
     public static final ResourceLocation ID = new ResourceLocation(MagicAndSorcery.MODID, "claymore");
@@ -54,6 +53,8 @@ public class ClaymoreSpell extends Spell {
         public int currentStage = 0; // 0 = ready for stage 1, 1 = completed stage 1, 2 = completed stage 2
         public int ticksSinceLastSwing = 0;
         public int recoveryTicks = 0; // brief delay between attacks to enforce heavy feel
+        public int pendingThrustDelay = 0; // counts down to thrust damage application (tick 16)
+        public int dissolveDelay = 0; // counts down to item dissolution and removal (tick 62)
     }
 
     private static final Map<UUID, ComboState> COMBO_STATES = new ConcurrentHashMap<>();
@@ -70,6 +71,11 @@ public class ClaymoreSpell extends Spell {
     @Override
     public double getRange() {
         return 5.0;
+    }
+
+    public static boolean isFinisherPlaying(UUID playerId) {
+        ComboState s = COMBO_STATES.get(playerId);
+        return s != null && s.dissolveDelay > 0;
     }
 
     @Override
@@ -129,15 +135,15 @@ public class ClaymoreSpell extends Spell {
 
         ComboState state = COMBO_STATES.computeIfAbsent(player.getUUID(), k -> new ComboState());
 
-        // Enforce recovery / attack windup
-        if (state.recoveryTicks > 0) return;
+        // Enforce recovery / attack windup or finisher lock
+        if (state.recoveryTicks > 0 || state.dissolveDelay > 0) return;
 
         // Determine which swing stage to execute
         int nextStage;
         if (state.currentStage == 1 && state.ticksSinceLastSwing <= COMBO_WINDOW_TICKS) {
             nextStage = 2; // Left to right
         } else if (state.currentStage == 2 && state.ticksSinceLastSwing <= COMBO_WINDOW_TICKS) {
-            nextStage = 3; // Thrust
+            nextStage = 3; // Thrust finisher
         } else {
             nextStage = 1; // Reset to right-to-left
         }
@@ -149,36 +155,37 @@ public class ClaymoreSpell extends Spell {
         // Update combo state
         state.currentStage = nextStage;
         state.ticksSinceLastSwing = 0;
-        int animDuration = (nextStage == 3) ? 14 : 10;
-        state.recoveryTicks = animDuration; // can't spam faster than the animation
 
         ServerLevel level = player.serverLevel();
         float yaw = player.getYRot();
         float pitch = player.getXRot();
         Vec3 playerPos = player.position();
 
-        // Broadcast animation packet to nearby clients
-        ModNetwork.sendToNearby(new PacketClaymoreSwingVisual(player.getId(), nextStage, yaw, pitch, playerPos, animDuration),
-                level, playerPos, 64.0);
-
-        // Compute damage and hit detection according to stage
         if (nextStage == 1) {
-            // Swing 1: 10 base damage, wide sweep right to left
+            int animDuration = 14;
+            state.recoveryTicks = 14;
+            ModNetwork.sendToNearby(new PacketClaymoreSwingVisual(player.getId(), 1, yaw, pitch, playerPos, animDuration),
+                    level, playerPos, 64.0);
             executeSweepHitbox(player, level, 10.0f, true);
-        } else if (nextStage == 2) {
-            // Swing 2: 10 base damage, wide sweep left to right
-            executeSweepHitbox(player, level, 10.0f, false);
-        } else {
-            // Swing 3: 15 base damage, concentrated forward thrust
-            executeThrustHitbox(player, level, 15.0f);
-        }
 
-        // If hits reached 0, dissolve sword immediately
-        if (hitsLeft <= 0) {
-            player.getInventory().setItem(player.getInventory().selected, ItemStack.EMPTY);
-            COMBO_STATES.remove(player.getUUID());
-            level.sendParticles(ParticleTypes.CRIT, player.getX(), player.getY() + 1.0, player.getZ(),
-                    20, 0.4, 0.5, 0.4, 0.15);
+        } else if (nextStage == 2) {
+            int animDuration = 14;
+            state.recoveryTicks = 14;
+            ModNetwork.sendToNearby(new PacketClaymoreSwingVisual(player.getId(), 2, yaw, pitch, playerPos, animDuration),
+                    level, playerPos, 64.0);
+            executeSweepHitbox(player, level, 10.0f, false);
+
+        } else {
+            // Stage 3: Finisher (62 ticks total)
+            // Phase 1 (Chamber: 10t) + Phase 2 (Anticipation: 6t) = 16t until thrust punch
+            // Phase 3 (Thrust: 6t) + Phase 4 (Suspension: 18t) + Phase 5 (Disintegration: 22t) = 62t total
+            int animDuration = 62;
+            state.recoveryTicks = 70;
+            state.pendingThrustDelay = 16; // Deals damage at tick 16
+            state.dissolveDelay = 62;      // Cleans up and removes at tick 62
+
+            ModNetwork.sendToNearby(new PacketClaymoreSwingVisual(player.getId(), 3, yaw, pitch, playerPos, animDuration),
+                    level, playerPos, 64.0);
         }
     }
 
@@ -210,7 +217,7 @@ public class ClaymoreSpell extends Spell {
         }
     }
 
-    private static void executeThrustHitbox(ServerPlayer player, ServerLevel level, float damage) {
+    public static void executeThrustHitbox(ServerPlayer player, ServerLevel level, float damage) {
         float yaw = player.getYRot();
         double yawRad = Math.toRadians(yaw);
         Vec3 forward = new Vec3(-Math.sin(yawRad), 0, Math.cos(yawRad)).normalize();
@@ -240,15 +247,56 @@ public class ClaymoreSpell extends Spell {
         }
     }
 
+    public static void removeClaymore(ServerPlayer player) {
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack s = player.getInventory().getItem(i);
+            if (!s.isEmpty() && s.getItem() instanceof ClaymoreItem) {
+                player.getInventory().setItem(i, ItemStack.EMPTY);
+            }
+        }
+        ServerLevel level = player.serverLevel();
+        level.sendParticles(ParticleTypes.CRIT, player.getX(), player.getY() + 1.0, player.getZ(),
+                25, 0.4, 0.5, 0.4, 0.15);
+        level.sendParticles(ParticleTypes.ENCHANTED_HIT, player.getX(), player.getY() + 1.0, player.getZ(),
+                20, 0.4, 0.5, 0.4, 0.1);
+        level.playSound(null, player.getX(), player.getY() + 1.0, player.getZ(),
+                SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.9f, 1.6f);
+    }
+
     public static void tickServer(net.minecraft.server.MinecraftServer server) {
         Iterator<Map.Entry<UUID, ComboState>> it = COMBO_STATES.entrySet().iterator();
         while (it.hasNext()) {
-            ComboState state = it.next().getValue();
+            Map.Entry<UUID, ComboState> entry = it.next();
+            UUID playerId = entry.getKey();
+            ComboState state = entry.getValue();
             state.ticksSinceLastSwing++;
             if (state.recoveryTicks > 0) {
                 state.recoveryTicks--;
             }
-            if (state.ticksSinceLastSwing > COMBO_WINDOW_TICKS && state.currentStage != 0) {
+
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+
+            // 1. Pending thrust hit (Tick 16 of Stage 3)
+            if (state.pendingThrustDelay > 0) {
+                state.pendingThrustDelay--;
+                if (state.pendingThrustDelay == 0 && player != null && player.isAlive()) {
+                    executeThrustHitbox(player, player.serverLevel(), 15.0f);
+                }
+            }
+
+            // 2. Dissolve & Removal (Tick 62 of Stage 3)
+            if (state.dissolveDelay > 0) {
+                state.dissolveDelay--;
+                if (state.dissolveDelay == 0) {
+                    if (player != null && player.isAlive()) {
+                        removeClaymore(player);
+                    }
+                    it.remove();
+                    continue;
+                }
+            }
+
+            if (state.ticksSinceLastSwing > COMBO_WINDOW_TICKS && state.currentStage != 0 && state.dissolveDelay == 0) {
                 // Combo window expired: reset to stage 0 so next attack starts fresh at swing 1
                 state.currentStage = 0;
             }
