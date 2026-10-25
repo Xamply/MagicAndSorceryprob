@@ -1,6 +1,8 @@
 package com.cesar.magicandsorcery.item;
 
 import com.cesar.magicandsorcery.client.render.ClaymoreFirstPersonRenderer;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.Multimap;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -10,6 +12,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -17,6 +23,7 @@ import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.client.extensions.common.IClientItemExtensions;
+import net.minecraftforge.fml.ModList;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -32,10 +39,22 @@ public class ClaymoreItem extends Item {
     public static final String TAG_HITS_LEFT = "ClaymoreHitsLeft";
     public static final int MAX_DURATION_TICKS = 200; // 10 seconds
 
+    private final Multimap<Attribute, AttributeModifier> defaultModifiers;
+
     public ClaymoreItem() {
         super(new Item.Properties()
                 .stacksTo(1)
                 .rarity(Rarity.EPIC));
+
+        ImmutableMultimap.Builder<Attribute, AttributeModifier> builder = ImmutableMultimap.builder();
+        builder.put(Attributes.ATTACK_DAMAGE, new AttributeModifier(BASE_ATTACK_DAMAGE_UUID, "Weapon modifier", 9.0, AttributeModifier.Operation.ADDITION));
+        builder.put(Attributes.ATTACK_SPEED, new AttributeModifier(BASE_ATTACK_SPEED_UUID, "Weapon modifier", -2.4, AttributeModifier.Operation.ADDITION));
+        this.defaultModifiers = builder.build();
+    }
+
+    @Override
+    public Multimap<Attribute, AttributeModifier> getDefaultAttributeModifiers(EquipmentSlot slot) {
+        return slot == EquipmentSlot.MAINHAND ? this.defaultModifiers : super.getDefaultAttributeModifiers(slot);
     }
 
     public static ItemStack createSummonedClaymore() {
@@ -78,7 +97,9 @@ public class ClaymoreItem extends Item {
 
     @Override
     public void initializeClient(Consumer<IClientItemExtensions> consumer) {
-        consumer.accept(ClaymoreFirstPersonRenderer.ITEM_EXTENSIONS);
+        if (!ModList.get().isLoaded("bettercombat")) {
+            consumer.accept(ClaymoreFirstPersonRenderer.ITEM_EXTENSIONS);
+        }
     }
 
     @Override

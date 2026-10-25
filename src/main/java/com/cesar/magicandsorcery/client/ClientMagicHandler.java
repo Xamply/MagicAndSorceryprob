@@ -191,9 +191,11 @@ public class ClientMagicHandler {
 
             if (event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT && event.getAction() == GLFW.GLFW_PRESS && mc.screen == null) {
                 if (mc.player != null && mc.player.getMainHandItem().getItem() instanceof com.cesar.magicandsorcery.item.ClaymoreItem) {
-                    ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest());
-                    event.setCanceled(true);
-                    return;
+                    if (!net.minecraftforge.fml.ModList.get().isLoaded("bettercombat")) {
+                        ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest());
+                        event.setCanceled(true);
+                        return;
+                    }
                 }
             }
 
@@ -220,7 +222,9 @@ public class ClientMagicHandler {
         @SubscribeEvent
         public static void onLeftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
             if (event.getEntity().getMainHandItem().getItem() instanceof com.cesar.magicandsorcery.item.ClaymoreItem) {
-                event.setCanceled(true);
+                if (!net.minecraftforge.fml.ModList.get().isLoaded("bettercombat")) {
+                    event.setCanceled(true);
+                }
             }
         }
 

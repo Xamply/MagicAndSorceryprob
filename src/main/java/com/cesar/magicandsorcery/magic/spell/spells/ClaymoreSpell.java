@@ -55,9 +55,36 @@ public class ClaymoreSpell extends Spell {
         public int recoveryTicks = 0; // brief delay between attacks to enforce heavy feel
         public int pendingThrustDelay = 0; // counts down to thrust damage application (tick 16)
         public int dissolveDelay = 0; // counts down to item dissolution and removal (tick 62)
+        public int lastAttackTick = -1; // prevents multi-target hits on same tick from consuming multiple hits
     }
 
     private static final Map<UUID, ComboState> COMBO_STATES = new ConcurrentHashMap<>();
+
+    public static void onBetterCombatAttack(ServerPlayer player) {
+        ItemStack held = player.getMainHandItem();
+        if (held.isEmpty() || !(held.getItem() instanceof ClaymoreItem)) return;
+
+        ComboState state = COMBO_STATES.computeIfAbsent(player.getUUID(), k -> new ComboState());
+
+        // Debounce: prevent multiple entity hits in the same tick / swing
+        if (state.lastAttackTick == player.tickCount) return;
+        if (state.dissolveDelay > 0) return; // already dissolving
+
+        state.lastAttackTick = player.tickCount;
+        state.ticksSinceLastSwing = 0;
+
+        CompoundTag tag = held.getOrCreateTag();
+        int hitsLeft = tag.getInt(ClaymoreItem.TAG_HITS_LEFT);
+        if (hitsLeft > 0) {
+            hitsLeft--;
+            tag.putInt(ClaymoreItem.TAG_HITS_LEFT, hitsLeft);
+        }
+
+        if (hitsLeft <= 0) {
+            // 3rd hit (estocada) performed: allow thrust animation (~25 ticks) to complete before dissolving
+            state.dissolveDelay = 25;
+        }
+    }
 
     public ClaymoreSpell() {
         super(ID, SpellSchool.CONJURATION, SpellType.SINGLE_TARGET,

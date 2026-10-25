@@ -97,9 +97,15 @@ public class PlayerMagicEvents {
 
     @SubscribeEvent
     public static void onPlayerAttackEntity(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
-        // Claymore does NOT use default Minecraft attack hits; it uses its special combo sequence
+        // Claymore special combo handling
         if (event.getEntity().getMainHandItem().getItem() instanceof ClaymoreItem) {
-            event.setCanceled(true);
+            if (!net.minecraftforge.fml.ModList.get().isLoaded("bettercombat")) {
+                event.setCanceled(true);
+            } else {
+                if (event.getEntity() instanceof ServerPlayer player) {
+                    com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.onBetterCombatAttack(player);
+                }
+            }
         }
     }
 
