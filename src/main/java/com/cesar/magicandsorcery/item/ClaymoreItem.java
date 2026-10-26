@@ -1,60 +1,41 @@
 package com.cesar.magicandsorcery.item;
 
-import com.cesar.magicandsorcery.client.render.ClaymoreFirstPersonRenderer;
-import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.Multimap;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.ai.attributes.Attribute;
-import net.minecraft.world.entity.ai.attributes.AttributeModifier;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Rarity;
+import net.minecraft.world.item.SwordItem;
+import net.minecraft.world.item.Tiers;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.client.extensions.common.IClientItemExtensions;
-import net.minecraftforge.fml.ModList;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
-import java.util.function.Consumer;
 
 /**
  * Temporary summoned weapon for Cast: Claymore.
+ * Behaves like a normal sword with a slight delay between swings (1.2 attack speed).
  * - Max 3 hits or 10 seconds lifespan (200 ticks).
  * - Disappears when exhausted or expired.
  */
-public class ClaymoreItem extends Item {
+public class ClaymoreItem extends SwordItem {
     public static final String TAG_TICKS_LEFT = "ClaymoreTicksLeft";
     public static final String TAG_HITS_LEFT = "ClaymoreHitsLeft";
     public static final int MAX_DURATION_TICKS = 200; // 10 seconds
 
-    private final Multimap<Attribute, AttributeModifier> defaultModifiers;
-
     public ClaymoreItem() {
-        super(new Item.Properties()
+        // Tiers.NETHERITE has +4 attack damage. 4 + 5 = 9 bonus (+ 1 base player = 10 total damage).
+        // Attack speed modifier of -2.8f gives 4.0 - 2.8 = 1.2 attack speed (slight delay between swings).
+        super(Tiers.NETHERITE, 5, -2.8f, new Properties()
                 .stacksTo(1)
                 .rarity(Rarity.EPIC));
-
-        ImmutableMultimap.Builder<Attribute, AttributeModifier> builder = ImmutableMultimap.builder();
-        builder.put(Attributes.ATTACK_DAMAGE, new AttributeModifier(BASE_ATTACK_DAMAGE_UUID, "Weapon modifier", 9.0, AttributeModifier.Operation.ADDITION));
-        builder.put(Attributes.ATTACK_SPEED, new AttributeModifier(BASE_ATTACK_SPEED_UUID, "Weapon modifier", -2.4, AttributeModifier.Operation.ADDITION));
-        this.defaultModifiers = builder.build();
-    }
-
-    @Override
-    public Multimap<Attribute, AttributeModifier> getDefaultAttributeModifiers(EquipmentSlot slot) {
-        return slot == EquipmentSlot.MAINHAND ? this.defaultModifiers : super.getDefaultAttributeModifiers(slot);
     }
 
     public static ItemStack createSummonedClaymore() {
@@ -62,6 +43,7 @@ public class ClaymoreItem extends Item {
         CompoundTag tag = stack.getOrCreateTag();
         tag.putInt(TAG_TICKS_LEFT, MAX_DURATION_TICKS);
         tag.putInt(TAG_HITS_LEFT, 3);
+        tag.putString("weapon_attributes", "{\"parent\":\"bettercombat:sword\"}");
         return stack;
     }
 
@@ -93,13 +75,6 @@ public class ClaymoreItem extends Item {
     @Override
     public boolean shouldCauseReequipAnimation(ItemStack oldStack, ItemStack newStack, boolean slotChanged) {
         return slotChanged || oldStack.getItem() != newStack.getItem();
-    }
-
-    @Override
-    public void initializeClient(Consumer<IClientItemExtensions> consumer) {
-        if (!ModList.get().isLoaded("bettercombat")) {
-            consumer.accept(ClaymoreFirstPersonRenderer.ITEM_EXTENSIONS);
-        }
     }
 
     @Override

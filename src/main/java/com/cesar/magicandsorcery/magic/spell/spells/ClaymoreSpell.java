@@ -60,7 +60,7 @@ public class ClaymoreSpell extends Spell {
 
     private static final Map<UUID, ComboState> COMBO_STATES = new ConcurrentHashMap<>();
 
-    public static void onBetterCombatAttack(ServerPlayer player) {
+    public static void onClaymoreAttack(ServerPlayer player) {
         ItemStack held = player.getMainHandItem();
         if (held.isEmpty() || !(held.getItem() instanceof ClaymoreItem)) return;
 

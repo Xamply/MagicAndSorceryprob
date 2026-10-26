@@ -97,14 +97,9 @@ public class PlayerMagicEvents {
 
     @SubscribeEvent
     public static void onPlayerAttackEntity(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
-        // Claymore special combo handling
         if (event.getEntity().getMainHandItem().getItem() instanceof ClaymoreItem) {
-            if (!net.minecraftforge.fml.ModList.get().isLoaded("bettercombat")) {
-                event.setCanceled(true);
-            } else {
-                if (event.getEntity() instanceof ServerPlayer player) {
-                    com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.onBetterCombatAttack(player);
-                }
+            if (event.getEntity() instanceof ServerPlayer player) {
+                com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.onClaymoreAttack(player);
             }
         }
     }

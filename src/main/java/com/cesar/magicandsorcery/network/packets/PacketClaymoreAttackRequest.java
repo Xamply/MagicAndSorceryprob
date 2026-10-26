@@ -23,11 +23,7 @@ public class PacketClaymoreAttackRequest {
         ctx.enqueueWork(() -> {
             ServerPlayer player = ctx.getSender();
             if (player != null && player.isAlive()) {
-                if (net.minecraftforge.fml.ModList.get().isLoaded("bettercombat")) {
-                    ClaymoreSpell.onBetterCombatAttack(player);
-                } else {
-                    ClaymoreSpell.handlePlayerSwing(player);
-                }
+                ClaymoreSpell.onClaymoreAttack(player);
             }
         });
         return true;
