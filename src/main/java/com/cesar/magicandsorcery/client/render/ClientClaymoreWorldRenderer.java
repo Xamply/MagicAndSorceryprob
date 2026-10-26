@@ -68,8 +68,6 @@ public class ClientClaymoreWorldRenderer {
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
 
-        ClaymoreFirstPersonRenderer.tickClient();
-
         synchronized (ACTIVE_SLASHES) {
             Iterator<ActiveWorldSlash> it = ACTIVE_SLASHES.iterator();
             while (it.hasNext()) {

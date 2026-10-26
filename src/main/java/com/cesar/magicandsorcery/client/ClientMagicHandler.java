@@ -209,12 +209,6 @@ public class ClientMagicHandler {
             }
         }
 
-        @SubscribeEvent
-        public static void onLeftClickEmpty(PlayerInteractEvent.LeftClickEmpty event) {
-            if (event.getEntity().getMainHandItem().getItem() instanceof com.cesar.magicandsorcery.item.ClaymoreItem) {
-                ModNetwork.sendToServer(new com.cesar.magicandsorcery.network.packets.PacketClaymoreAttackRequest());
-            }
-        }
 
         @SubscribeEvent
         public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {

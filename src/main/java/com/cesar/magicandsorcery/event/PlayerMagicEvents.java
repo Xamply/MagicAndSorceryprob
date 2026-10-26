@@ -1,7 +1,6 @@
 package com.cesar.magicandsorcery.event;
 
 import com.cesar.magicandsorcery.MagicAndSorcery;
-import com.cesar.magicandsorcery.item.ClaymoreItem;
 import com.cesar.magicandsorcery.magic.capability.PlayerMagicData;
 import com.cesar.magicandsorcery.magic.capability.PlayerMagicProvider;
 import com.cesar.magicandsorcery.magic.spell.spells.BlizzardSpell;
@@ -91,15 +90,6 @@ public class PlayerMagicEvents {
         if (event.getEntity() instanceof ServerPlayer player) {
             if (com.cesar.magicandsorcery.magic.spell.spells.DenySpell.tryBlockDamage(player, event.getSource(), event.getAmount())) {
                 event.setCanceled(true);
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public static void onPlayerAttackEntity(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
-        if (event.getEntity().getMainHandItem().getItem() instanceof ClaymoreItem) {
-            if (event.getEntity() instanceof ServerPlayer player) {
-                com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.onClaymoreAttack(player);
             }
         }
     }
