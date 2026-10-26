@@ -21,12 +21,12 @@ import java.util.List;
 
 /**
  * Temporary summoned weapon for Cast: Claymore.
- * Functions and animates identically to a normal Minecraft sword.
- * Has the custom pixel art Claymore texture.
+ * Uses the Divine Sword model with majestic enlarged greatsword scale and holy glint.
+ * Executes the 3-hit combo (slash right, slash left, stab) and cleanly dissolves upon finishing the stab.
  */
 public class ClaymoreItem extends SwordItem {
     public static final String TAG_EXPIRE_AT = "ClaymoreExpireAt";
-    public static final int DURATION_TICKS = 240; // 12 seconds lifespan when summoned
+    public static final int DURATION_TICKS = 240; // 12 seconds backup lifespan
 
     public ClaymoreItem() {
         // Standard Netherite Sword stats: +3 damage bonus (8 total damage), -2.4F attack speed modifier (1.6 attack speed)
@@ -47,6 +47,12 @@ public class ClaymoreItem extends SwordItem {
     }
 
     @Override
+    public boolean isFoil(ItemStack stack) {
+        // Enchanted divine glint matching Divine Sword
+        return true;
+    }
+
+    @Override
     public void inventoryTick(ItemStack stack, Level level, Entity entity, int slotId, boolean isSelected) {
         if (!level.isClientSide() && entity instanceof Player player) {
             CompoundTag tag = stack.getTag();
@@ -56,9 +62,9 @@ public class ClaymoreItem extends SwordItem {
                     player.getInventory().setItem(slotId, ItemStack.EMPTY);
                     if (level instanceof ServerLevel sl) {
                         sl.sendParticles(ParticleTypes.CRIT, entity.getX(), entity.getY() + 1.0, entity.getZ(),
-                                20, 0.4, 0.5, 0.4, 0.15);
+                                25, 0.4, 0.5, 0.4, 0.15);
                         sl.sendParticles(ParticleTypes.ENCHANTED_HIT, entity.getX(), entity.getY() + 1.0, entity.getZ(),
-                                15, 0.4, 0.5, 0.4, 0.1);
+                            20, 0.4, 0.5, 0.4, 0.1);
                         sl.playSound(null, entity.getX(), entity.getY() + 1.0, entity.getZ(),
                                 SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.8f, 1.6f);
                     }

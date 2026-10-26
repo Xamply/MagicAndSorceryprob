@@ -95,6 +95,15 @@ public class PlayerMagicEvents {
     }
 
     @SubscribeEvent
+    public static void onPlayerAttackEntity(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
+        if (event.getEntity().getMainHandItem().getItem() instanceof com.cesar.magicandsorcery.item.ClaymoreItem) {
+            if (event.getEntity() instanceof ServerPlayer player) {
+                com.cesar.magicandsorcery.magic.spell.spells.ClaymoreSpell.onClaymoreAttack(player);
+            }
+        }
+    }
+
+    @SubscribeEvent
     public static void onLivingDamage(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
         LivingEntity victim = event.getEntity();
         if (victim != null && !victim.level().isClientSide()) {
